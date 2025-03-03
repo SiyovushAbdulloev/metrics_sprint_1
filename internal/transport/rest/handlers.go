@@ -3,24 +3,23 @@ package rest
 import (
 	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/models"
+	"github.com/gin-gonic/gin"
 	"net/http"
 )
 
-func (s *Server) StoreMetric(w http.ResponseWriter, req *http.Request) {
-	metricType := req.PathValue("type")
-	metricName := req.PathValue("name")
-	metricValue := req.PathValue("value")
-
-	fmt.Printf("TYPE: %s\n", metricType)
+func (s *Server) StoreMetric(ctx *gin.Context) {
+	metricType := ctx.Param("type")
+	metricName := ctx.Param("name")
+	metricValue := ctx.Param("value")
 
 	if metricType != string(models.Gauge) && metricType != string(models.Counter) {
-		http.Error(w, errInvalidType.Error(), http.StatusBadRequest)
+		ctx.String(http.StatusBadRequest, errInvalidType.Error())
 		return
 	}
 
 	value, ok := s.validValue(metricType, metricValue)
 	if !ok {
-		http.Error(w, errInvalidValue.Error(), http.StatusBadRequest)
+		ctx.String(http.StatusBadRequest, errInvalidValue.Error())
 		return
 	}
 
@@ -31,10 +30,34 @@ func (s *Server) StoreMetric(w http.ResponseWriter, req *http.Request) {
 	})
 
 	if !added {
-		http.Error(w, "something went wrong", http.StatusInternalServerError)
+		ctx.String(http.StatusInternalServerError, "something went wrong\n")
+		return
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
+	ctx.String(http.StatusOK, "OK")
+}
+
+func (s *Server) GetMetric(ctx *gin.Context) {
+	metricType := ctx.Param("type")
+	metricName := ctx.Param("name")
+
+	if metricType != string(models.Gauge) && metricType != string(models.Counter) {
+		ctx.String(http.StatusBadRequest, errInvalidType.Error())
+		return
+	}
+
+	metric, ok := s.Service.GetMetric(metricType, metricName)
+
+	if !ok {
+		ctx.String(http.StatusNotFound, errNotFound.Error())
+		return
+	}
+
+	ctx.String(http.StatusOK, fmt.Sprintf("%v", metric.Value))
+}
+
+func (s *Server) GetMetrics(ctx *gin.Context) {
+	ctx.HTML(http.StatusOK, "index.html", gin.H{
+		"data": s.Service.GetMetrics(),
+	})
 }

@@ -77,3 +77,17 @@ func (mms *MockMetricStorage) StoreMetric(metric models.Metric) bool {
 		return false
 	}
 }
+
+func (mms MockMetricStorage) GetMetric(metricType string, metricName string) (models.Metric, bool) {
+	for _, m := range mms.DB.data {
+		if m.Name == metricName && string(m.Type) == metricType {
+			return m, true
+		}
+	}
+
+	return models.Metric{}, false
+}
+
+func (mms MockMetricStorage) GetMetrics() []models.Metric {
+	return mms.DB.data
+}
