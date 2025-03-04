@@ -87,7 +87,7 @@ func TestServer_StoreMetric(t *testing.T) {
 
 	db := memory.NewMockDB(make([]models.Metric, 0))
 	mockMetricStorage := memory.NewMockMetricStorage(db)
-	server := InitApp(&mockMetricStorage)
+	server := InitApp(&mockMetricStorage, "localhost:8080")
 
 	router := gin.Default()
 	router.POST("/update/:type/:name/:value", server.StoreMetric)
