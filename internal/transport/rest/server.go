@@ -1,7 +1,6 @@
 package rest
 
 import (
-	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/database"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/services"
 	"github.com/gin-gonic/gin"
@@ -10,20 +9,18 @@ import (
 )
 
 type Server struct {
-	Host    string
-	Port    int16
+	Address string
 	Service services.MetricService
 }
 
-func InitApp(metricStorage database.MetricStorage) *Server {
+func InitApp(metricStorage database.MetricStorage, address string) *Server {
 	metricService := services.NewMetricService(metricStorage)
-	return NewServer("localhost", 8080, metricService)
+	return NewServer(address, metricService)
 }
 
-func NewServer(host string, port int16, service services.MetricService) *Server {
+func NewServer(address string, service services.MetricService) *Server {
 	return &Server{
-		Host:    host,
-		Port:    port,
+		Address: address,
 		Service: service,
 	}
 }
@@ -40,15 +37,11 @@ func (s *Server) Run() (bool, error) {
 	server.GET("/value/:type/:name", s.GetMetric)
 	server.POST("/update/:type/:name/:value", s.StoreMetric)
 
-	err := server.Run(s.Addr())
+	err := server.Run(s.Address)
 
 	if err != nil {
 		return false, err
 	}
 
 	return true, nil
-}
-
-func (s *Server) Addr() string {
-	return fmt.Sprintf("%s:%d", s.Host, s.Port)
 }

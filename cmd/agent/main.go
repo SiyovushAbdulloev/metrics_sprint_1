@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -167,16 +168,16 @@ func collectMetrics(m *Metrics) {
 		{
 			Name:  "poll_count",
 			Type:  "counter",
-			Value: int64(counter),
+			Value: counter,
 		},
 	}
 
 	m.data = data
 }
 
-func sendMetrics(client http.Client, m Metrics) {
+func sendMetrics(client http.Client, m Metrics, address string) {
 	for _, metric := range m.data {
-		addr := fmt.Sprintf("http://localhost:8080/update/%s/%s/%v", metric.Type, metric.Name, metric.Value)
+		addr := fmt.Sprintf("http://%s/update/%s/%s/%v", address, metric.Type, metric.Name, metric.Value)
 		res, err := client.Post(addr, "text/plain", nil)
 		if err != nil {
 			log.Printf("Error posting metric: %v", err)
@@ -187,10 +188,14 @@ func sendMetrics(client http.Client, m Metrics) {
 }
 
 func main() {
+	address := flag.String("a", "localhost:8080", "The address to send HTTP requests.")
+	reportInterval := flag.Int("r", 10, "The interval in seconds between metric reporting. (in seconds)")
+	pollInterval := flag.Int("p", 2, "The interval in seconds between metric polling. (in seconds)")
+	flag.Parse()
 	client := http.Client{}
 	m := Metrics{}
-	collectTicker := time.NewTicker(2 * time.Second)
-	sendTicker := time.NewTicker(10 * time.Second)
+	collectTicker := time.NewTicker(time.Duration(*pollInterval) * time.Second)
+	sendTicker := time.NewTicker(time.Duration(*reportInterval) * time.Second)
 	defer collectTicker.Stop()
 	defer sendTicker.Stop()
 
@@ -200,7 +205,7 @@ func main() {
 			case <-collectTicker.C:
 				collectMetrics(&m)
 			case <-sendTicker.C:
-				sendMetrics(client, m)
+				sendMetrics(client, m, *address)
 			}
 		}
 	}()
