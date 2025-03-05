@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"runtime"
+	"strconv"
 	"time"
 )
 
@@ -187,15 +189,53 @@ func sendMetrics(client http.Client, m Metrics, address string) {
 	}
 }
 
-func main() {
-	address := flag.String("a", "localhost:8080", "The address to send HTTP requests.")
-	reportInterval := flag.Int("r", 10, "The interval in seconds between metric reporting. (in seconds)")
-	pollInterval := flag.Int("p", 2, "The interval in seconds between metric polling. (in seconds)")
+func getVars() (string, int, int) {
+	var address string
+	var reportInterval int
+	var pollInterval int
+	addr := os.Getenv("ADDRESS")
+	reportInt := os.Getenv("REPORT_INTERVAL")
+	pollInt := os.Getenv("POLL_INTERVAL")
+	addrFlag := flag.String("a", "localhost:8080", "The address to send HTTP requests.")
+	reportIntFlag := flag.Int("r", 10, "The interval in seconds between metric reporting. (in seconds)")
+	pollIntFlag := flag.Int("p", 2, "The interval in seconds between metric polling. (in seconds)")
 	flag.Parse()
+
+	if addr == "" {
+		address = *addrFlag
+	} else {
+		address = addr
+	}
+
+	if reportInt == "" {
+		reportInterval = *reportIntFlag
+	} else {
+		value, err := strconv.Atoi(reportInt)
+		if err != nil {
+			panic(err)
+		}
+		reportInterval = value
+	}
+
+	if pollInt == "" {
+		pollInterval = *pollIntFlag
+	} else {
+		value, err := strconv.Atoi(pollInt)
+		if err != nil {
+			panic(err)
+		}
+		pollInterval = value
+	}
+
+	return address, reportInterval, pollInterval
+}
+
+func main() {
+	address, reportInterval, pollInterval := getVars()
 	client := http.Client{}
 	m := Metrics{}
-	collectTicker := time.NewTicker(time.Duration(*pollInterval) * time.Second)
-	sendTicker := time.NewTicker(time.Duration(*reportInterval) * time.Second)
+	collectTicker := time.NewTicker(time.Duration(pollInterval) * time.Second)
+	sendTicker := time.NewTicker(time.Duration(reportInterval) * time.Second)
 	defer collectTicker.Stop()
 	defer sendTicker.Stop()
 
@@ -205,7 +245,7 @@ func main() {
 			case <-collectTicker.C:
 				collectMetrics(&m)
 			case <-sendTicker.C:
-				sendMetrics(client, m, *address)
+				sendMetrics(client, m, address)
 			}
 		}
 	}()
