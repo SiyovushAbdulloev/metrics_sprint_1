@@ -23,29 +23,11 @@ func Main(cf *config.Config) {
 	metricHl := metricHandler.New(metricUC, l)
 
 	httpServer := httpserver.New(httpserver.WithAddress(cf.Server.Address))
-	http.DefineMetricRoutes(httpServer.App, metricHl)
+	http.DefineMetricRoutes(httpServer.App, metricHl, l)
 
 	err = httpServer.Start()
 
 	if err != nil {
 		panic(err)
 	}
-
-	//var address string
-	//addr := os.Getenv("ADDRESS")
-	//addrFlag := flag.String("a", "localhost:8080", "The address to listen on for HTTP requests.")
-	//
-	//flag.Parse()
-	//if addr == "" {
-	//	address = *addrFlag
-	//} else {
-	//	address = addr
-	//}
-	//server := http.InitApp(&metricStorage, address)
-	//
-	//_, err = server.Run()
-	//
-	//if err != nil {
-	//	panic(err)
-	//}
 }
