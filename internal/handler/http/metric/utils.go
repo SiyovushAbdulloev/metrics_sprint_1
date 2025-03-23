@@ -1,8 +1,10 @@
-package rest
+package metric
 
-import "strconv"
+import (
+	"strconv"
+)
 
-func (s *Server) validValue(metricType string, value string) (any, bool) {
+func (h *Handler) validValue(metricType string, value string) (any, bool) {
 	switch metricType {
 	case "gauge":
 		v, err := strconv.ParseFloat(value, 64)

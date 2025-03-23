@@ -1,33 +1,33 @@
 package memory
 
 import (
-	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/models"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
 )
 
-type MemStorage struct {
-	data []models.Metric
+type MockMemStorage struct {
+	data []entity.Metric
 }
 
-type MetricStorage struct {
-	DB MemStorage
+type MockMetricRepository struct {
+	DB MockMemStorage
 }
 
-func NewMetricStorage(db MemStorage) MetricStorage {
-	return MetricStorage{
+func NewMockMetricRepository(db MockMemStorage) MockMetricRepository {
+	return MockMetricRepository{
 		DB: db,
 	}
 }
 
-func NewDB(data []models.Metric) MemStorage {
-	return MemStorage{
+func NewMockDB(data []entity.Metric) MockMemStorage {
+	return MockMemStorage{
 		data: data,
 	}
 }
 
-func (ms *MetricStorage) StoreMetric(metric models.Metric) bool {
+func (mms MockMetricRepository) StoreMetric(metric entity.Metric) bool {
 	switch metric.Type {
-	case models.Gauge:
-		data := ms.DB.data
+	case entity.Gauge:
+		data := mms.DB.data
 		if len(data) == 0 {
 			data = append(data, metric)
 		} else {
@@ -44,10 +44,10 @@ func (ms *MetricStorage) StoreMetric(metric models.Metric) bool {
 			}
 		}
 
-		ms.DB.data = data
+		mms.DB.data = data
 		return true
-	case models.Counter:
-		data := ms.DB.data
+	case entity.Counter:
+		data := mms.DB.data
 
 		if len(data) == 0 {
 			data = append(data, metric)
@@ -58,7 +58,7 @@ func (ms *MetricStorage) StoreMetric(metric models.Metric) bool {
 					notFound = false
 					newValue := metric.Value.(int64)
 					previousValue := v.Value.(int64)
-					data[k] = models.Metric{
+					data[k] = entity.Metric{
 						Name:  metric.Name,
 						Type:  metric.Type,
 						Value: newValue + previousValue,
@@ -71,23 +71,23 @@ func (ms *MetricStorage) StoreMetric(metric models.Metric) bool {
 			}
 		}
 
-		ms.DB.data = data
+		mms.DB.data = data
 		return true
 	default:
 		return false
 	}
 }
 
-func (ms MetricStorage) GetMetric(metricType string, metricName string) (models.Metric, bool) {
-	for _, m := range ms.DB.data {
+func (mms MockMetricRepository) GetMetric(metricType string, metricName string) (entity.Metric, bool) {
+	for _, m := range mms.DB.data {
 		if m.Name == metricName && string(m.Type) == metricType {
 			return m, true
 		}
 	}
 
-	return models.Metric{}, false
+	return entity.Metric{}, false
 }
 
-func (ms MetricStorage) GetMetrics() []models.Metric {
-	return ms.DB.data
+func (mms MockMetricRepository) GetMetrics() []entity.Metric {
+	return mms.DB.data
 }
