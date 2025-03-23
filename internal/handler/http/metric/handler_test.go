@@ -1,9 +1,10 @@
-package rest
+package metric
 
 import (
 	"fmt"
-	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/database/memory"
-	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/models"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/repository/memory"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/metric"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,7 +35,7 @@ func TestServer_StoreMetric(t *testing.T) {
 		{
 			name: "Storing alloc",
 			metric: Metric{
-				Type:  string(models.Gauge),
+				Type:  string(entity.Gauge),
 				Name:  "alloc",
 				Value: 1234.32,
 			},
@@ -47,7 +48,7 @@ func TestServer_StoreMetric(t *testing.T) {
 		{
 			name: "Storing counter",
 			metric: Metric{
-				Type:  string(models.Counter),
+				Type:  string(entity.Counter),
 				Name:  "counter",
 				Value: 12,
 			},
@@ -73,7 +74,7 @@ func TestServer_StoreMetric(t *testing.T) {
 		{
 			name: "Storing invalid value",
 			metric: Metric{
-				Type:  string(models.Counter),
+				Type:  string(entity.Counter),
 				Name:  "counter",
 				Value: "12asdf",
 			},
@@ -85,12 +86,13 @@ func TestServer_StoreMetric(t *testing.T) {
 		},
 	}
 
-	db := memory.NewMockDB(make([]models.Metric, 0))
-	mockMetricStorage := memory.NewMockMetricStorage(db)
-	server := InitApp(&mockMetricStorage, "localhost:8080")
+	db := memory.NewMockDB(make([]entity.Metric, 0))
+	metricRepository := memory.NewMockMetricRepository(db)
+	metricUC := metric.New(metricRepository)
+	hl := New(metricUC, nil)
 
 	router := gin.Default()
-	router.POST("/update/:type/:name/:value", server.StoreMetric)
+	router.POST("/update/:type/:name/:value", hl.StoreMetric)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

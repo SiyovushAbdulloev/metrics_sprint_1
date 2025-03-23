@@ -1,4 +1,4 @@
-package models
+package entity
 
 type MetricType string
 
@@ -13,7 +13,7 @@ type Metric struct {
 	Value any
 }
 
-func NewMetric(name string, metricType MetricType, value any) *Metric {
+func New(name string, metricType MetricType, value any) *Metric {
 	return &Metric{
 		Name:  name,
 		Type:  metricType,
