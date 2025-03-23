@@ -1,8 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -12,13 +13,20 @@ import (
 )
 
 type Metric struct {
-	Name  string
-	Type  string
-	Value any
+	ID    string
+	MType string
+	Value float64
+	Delta int64
 }
 
 type Metrics struct {
 	data []Metric
+}
+
+type Config struct {
+	Address        string
+	ReportInterval int
+	PollInterval   int
 }
 
 func collectMetrics(m *Metrics) {
@@ -28,149 +36,149 @@ func collectMetrics(m *Metrics) {
 	var counter int64 = 1
 
 	if length := len(m.data); length > 0 {
-		counter = m.data[len(m.data)-1].Value.(int64) + 1
+		counter = m.data[len(m.data)-1].Delta + 1
 	}
 
 	data := []Metric{
 		{
-			Name:  "alloc",
-			Type:  "gauge",
+			ID:    "alloc",
+			MType: "gauge",
 			Value: float64(rtm.Alloc),
 		},
 		{
-			Name:  "buck_hash_sys",
-			Type:  "gauge",
+			ID:    "buck_hash_sys",
+			MType: "gauge",
 			Value: float64(rtm.BuckHashSys),
 		},
 		{
-			Name:  "frees",
-			Type:  "gauge",
+			ID:    "frees",
+			MType: "gauge",
 			Value: float64(rtm.Frees),
 		},
 		{
-			Name:  "gccpu_fraction",
-			Type:  "gauge",
+			ID:    "gccpu_fraction",
+			MType: "gauge",
 			Value: float64(rtm.GCCPUFraction),
 		},
 		{
-			Name:  "heap_alloc",
-			Type:  "gauge",
+			ID:    "heap_alloc",
+			MType: "gauge",
 			Value: float64(rtm.HeapAlloc),
 		},
 		{
-			Name:  "heap_idle",
-			Type:  "gauge",
+			ID:    "heap_idle",
+			MType: "gauge",
 			Value: float64(rtm.HeapIdle),
 		},
 		{
-			Name:  "heap_inuse",
-			Type:  "gauge",
+			ID:    "heap_inuse",
+			MType: "gauge",
 			Value: float64(rtm.HeapInuse),
 		},
 		{
-			Name:  "heap_objects",
-			Type:  "gauge",
+			ID:    "heap_objects",
+			MType: "gauge",
 			Value: float64(rtm.HeapObjects),
 		},
 		{
-			Name:  "heap_released",
-			Type:  "gauge",
+			ID:    "heap_released",
+			MType: "gauge",
 			Value: float64(rtm.HeapReleased),
 		},
 		{
-			Name:  "heap_sys",
-			Type:  "gauge",
+			ID:    "heap_sys",
+			MType: "gauge",
 			Value: float64(rtm.HeapSys),
 		},
 		{
-			Name:  "last_gc",
-			Type:  "gauge",
+			ID:    "last_gc",
+			MType: "gauge",
 			Value: float64(rtm.LastGC),
 		},
 		{
-			Name:  "lookups",
-			Type:  "gauge",
+			ID:    "lookups",
+			MType: "gauge",
 			Value: float64(rtm.Lookups),
 		},
 		{
-			Name:  "mcache_inuse",
-			Type:  "gauge",
+			ID:    "mcache_inuse",
+			MType: "gauge",
 			Value: float64(rtm.MCacheInuse),
 		},
 		{
-			Name:  "m_cache_sys",
-			Type:  "gauge",
+			ID:    "m_cache_sys",
+			MType: "gauge",
 			Value: float64(rtm.MCacheSys),
 		},
 		{
-			Name:  "mspan_inuse",
-			Type:  "gauge",
+			ID:    "mspan_inuse",
+			MType: "gauge",
 			Value: float64(rtm.MSpanInuse),
 		},
 		{
-			Name:  "mspan_sys",
-			Type:  "gauge",
+			ID:    "mspan_sys",
+			MType: "gauge",
 			Value: float64(rtm.MSpanSys),
 		},
 		{
-			Name:  "mallocs",
-			Type:  "gauge",
+			ID:    "mallocs",
+			MType: "gauge",
 			Value: float64(rtm.Mallocs),
 		},
 		{
-			Name:  "next_gc",
-			Type:  "gauge",
+			ID:    "next_gc",
+			MType: "gauge",
 			Value: float64(rtm.NextGC),
 		},
 		{
-			Name:  "num_forced_gc",
-			Type:  "gauge",
+			ID:    "num_forced_gc",
+			MType: "gauge",
 			Value: float64(rtm.NumForcedGC),
 		},
 		{
-			Name:  "num_gc",
-			Type:  "gauge",
+			ID:    "num_gc",
+			MType: "gauge",
 			Value: float64(rtm.NumGC),
 		},
 		{
-			Name:  "other_sys",
-			Type:  "gauge",
+			ID:    "other_sys",
+			MType: "gauge",
 			Value: float64(rtm.OtherSys),
 		},
 		{
-			Name:  "pause_totalns",
-			Type:  "gauge",
+			ID:    "pause_totalns",
+			MType: "gauge",
 			Value: float64(rtm.PauseTotalNs),
 		},
 		{
-			Name:  "stack_inuse",
-			Type:  "gauge",
+			ID:    "stack_inuse",
+			MType: "gauge",
 			Value: float64(rtm.StackInuse),
 		},
 		{
-			Name:  "stack_sys",
-			Type:  "gauge",
+			ID:    "stack_sys",
+			MType: "gauge",
 			Value: float64(rtm.StackSys),
 		},
 		{
-			Name:  "sys",
-			Type:  "gauge",
+			ID:    "sys",
+			MType: "gauge",
 			Value: float64(rtm.Sys),
 		},
 		{
-			Name:  "total_alloc",
-			Type:  "gauge",
+			ID:    "total_alloc",
+			MType: "gauge",
 			Value: float64(rtm.TotalAlloc),
 		},
 		{
-			Name:  "random_value",
-			Type:  "gauge",
+			ID:    "random_value",
+			MType: "gauge",
 			Value: float64(1),
 		},
 		{
-			Name:  "poll_count",
-			Type:  "counter",
-			Value: counter,
+			ID:    "poll_count",
+			MType: "counter",
+			Delta: counter,
 		},
 	}
 
@@ -179,8 +187,14 @@ func collectMetrics(m *Metrics) {
 
 func sendMetrics(client http.Client, m Metrics, address string) {
 	for _, metric := range m.data {
-		addr := fmt.Sprintf("http://%s/update/%s/%s/%v", address, metric.Type, metric.Name, metric.Value)
-		res, err := client.Post(addr, "text/plain", nil)
+		data, err := json.Marshal(metric)
+		if err != nil {
+			log.Printf("Error marshaling metric: %v", err)
+			return
+		}
+		body := bytes.NewBuffer(data)
+
+		res, err := client.Post("http://localhost:8080/update", "application/json", body)
 		if err != nil {
 			log.Printf("Error posting metric: %v", err)
 		}
@@ -189,7 +203,7 @@ func sendMetrics(client http.Client, m Metrics, address string) {
 	}
 }
 
-func getVars() (string, int, int) {
+func getVars() Config {
 	var address string
 	var reportInterval int
 	var pollInterval int
@@ -227,15 +241,19 @@ func getVars() (string, int, int) {
 		pollInterval = value
 	}
 
-	return address, reportInterval, pollInterval
+	return Config{
+		Address:        address,
+		ReportInterval: reportInterval,
+		PollInterval:   pollInterval,
+	}
 }
 
 func main() {
-	address, reportInterval, pollInterval := getVars()
+	config := getVars()
 	client := http.Client{}
 	m := Metrics{}
-	collectTicker := time.NewTicker(time.Duration(pollInterval) * time.Second)
-	sendTicker := time.NewTicker(time.Duration(reportInterval) * time.Second)
+	collectTicker := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
+	sendTicker := time.NewTicker(time.Duration(config.ReportInterval) * time.Second)
 	defer collectTicker.Stop()
 	defer sendTicker.Stop()
 
@@ -245,7 +263,7 @@ func main() {
 			case <-collectTicker.C:
 				collectMetrics(&m)
 			case <-sendTicker.C:
-				sendMetrics(client, m, address)
+				sendMetrics(client, m, config.Address)
 			}
 		}
 	}()

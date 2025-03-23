@@ -5,7 +5,7 @@ import (
 )
 
 type MemStorage struct {
-	data []entity.Metric
+	data []entity.Metrics
 }
 
 type MetricRepository struct {
@@ -18,22 +18,23 @@ func NewMetricRepository(db MemStorage) MetricRepository {
 	}
 }
 
-func NewDB(data []entity.Metric) MemStorage {
+func NewDB(data []entity.Metrics) MemStorage {
 	return MemStorage{
 		data: data,
 	}
 }
 
-func (ms MetricRepository) StoreMetric(metric entity.Metric) bool {
-	switch metric.Type {
+func (ms MetricRepository) StoreMetric(metric entity.Metrics) entity.Metrics {
+	data := ms.DB.data
+
+	switch metric.MType {
 	case entity.Gauge:
-		data := ms.DB.data
 		if len(data) == 0 {
 			data = append(data, metric)
 		} else {
 			notFound := true
 			for k, v := range data {
-				if v.Name == metric.Name {
+				if v.ID == metric.ID {
 					notFound = false
 					data[k] = metric
 				}
@@ -45,24 +46,20 @@ func (ms MetricRepository) StoreMetric(metric entity.Metric) bool {
 		}
 
 		ms.DB.data = data
-		return true
+		return metric
 	case entity.Counter:
-		data := ms.DB.data
-
 		if len(data) == 0 {
 			data = append(data, metric)
 		} else {
 			notFound := true
 			for k, v := range data {
-				if v.Name == metric.Name {
+				if v.ID == metric.ID {
 					notFound = false
-					newValue := metric.Value.(int64)
-					previousValue := v.Value.(int64)
-					data[k] = entity.Metric{
-						Name:  metric.Name,
-						Type:  metric.Type,
-						Value: newValue + previousValue,
+					if metric.Delta != nil && v.Delta != nil {
+						newValue := *metric.Delta + *v.Delta
+						metric.Delta = &newValue
 					}
+					data[k] = metric
 				}
 			}
 
@@ -72,22 +69,22 @@ func (ms MetricRepository) StoreMetric(metric entity.Metric) bool {
 		}
 
 		ms.DB.data = data
-		return true
+		return metric
 	default:
-		return false
+		return entity.Metrics{}
 	}
 }
 
-func (ms MetricRepository) GetMetric(metricType string, metricName string) (entity.Metric, bool) {
+func (ms MetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics, bool) {
 	for _, m := range ms.DB.data {
-		if m.Name == metricName && string(m.Type) == metricType {
+		if m.ID == metric.ID && m.MType == metric.MType {
 			return m, true
 		}
 	}
 
-	return entity.Metric{}, false
+	return entity.Metrics{}, false
 }
 
-func (ms MetricRepository) GetMetrics() []entity.Metric {
+func (ms MetricRepository) GetMetrics() []entity.Metrics {
 	return ms.DB.data
 }

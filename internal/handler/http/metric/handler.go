@@ -1,12 +1,13 @@
 package metric
 
 import (
-	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase"
 	error2 "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/error"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/mailru/easyjson"
+	"io"
 	"net/http"
 )
 
@@ -23,52 +24,77 @@ func New(uc usecase.MetricUseCase, l logger.Interface) *Handler {
 }
 
 func (h *Handler) StoreMetric(ctx *gin.Context) {
-	metricType := ctx.Param("type")
-	metricName := ctx.Param("name")
-	metricValue := ctx.Param("value")
+	var metric entity.Metrics
 
-	if metricType != string(entity.Gauge) && metricType != string(entity.Counter) {
-		ctx.String(http.StatusBadRequest, error2.ErrInvalidType.Error())
+	body, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse{
+			Message: error2.ErrSomethingWentWrong.Error(),
+		})
 		return
 	}
 
-	value, ok := h.validValue(metricType, metricValue)
-	if !ok {
-		ctx.String(http.StatusBadRequest, error2.ErrInvalidValue.Error())
+	err = easyjson.Unmarshal(body, &metric)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse{
+			Message: error2.ErrInvalidValue.Error(),
+		})
 		return
 	}
 
-	added := h.uc.StoreMetric(entity.Metric{
-		Name:  metricName,
-		Value: value,
-		Type:  entity.MetricType(metricType),
-	})
-
-	if !added {
-		ctx.String(http.StatusInternalServerError, "something went wrong\n")
+	if metric.MType != entity.Gauge && metric.MType != entity.Counter {
+		ctx.JSON(http.StatusBadRequest, errorResponse{
+			Message: error2.ErrInvalidType.Error(),
+		})
 		return
 	}
 
-	ctx.String(http.StatusOK, "OK")
+	added := h.uc.StoreMetric(metric)
+
+	if added.ID == "" {
+		ctx.JSON(http.StatusInternalServerError, errorResponse{
+			Message: error2.ErrSomethingWentWrong.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, metric)
 }
 
 func (h *Handler) GetMetric(ctx *gin.Context) {
-	metricType := ctx.Param("type")
-	metricName := ctx.Param("name")
-
-	if metricType != string(entity.Gauge) && metricType != string(entity.Counter) {
-		ctx.String(http.StatusBadRequest, error2.ErrInvalidType.Error())
+	var metric entity.Metrics
+	body, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse{
+			Message: error2.ErrSomethingWentWrong.Error(),
+		})
 		return
 	}
 
-	metric, ok := h.uc.GetMetric(metricType, metricName)
+	err = easyjson.Unmarshal(body, &metric)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse{
+			Message: error2.ErrInvalidValue.Error(),
+		})
+	}
+
+	if metric.MType != entity.Gauge && metric.MType != entity.Counter {
+		ctx.JSON(http.StatusBadRequest, errorResponse{
+			Message: error2.ErrInvalidType.Error(),
+		})
+		return
+	}
+
+	m, ok := h.uc.GetMetric(metric)
 
 	if !ok {
-		ctx.String(http.StatusNotFound, error2.ErrNotFound.Error())
+		ctx.JSON(http.StatusNotFound, errorResponse{
+			Message: error2.ErrNotFound.Error(),
+		})
 		return
 	}
 
-	ctx.String(http.StatusOK, fmt.Sprintf("%v", metric.Value))
+	ctx.JSON(http.StatusOK, m)
 }
 
 func (h *Handler) GetMetrics(ctx *gin.Context) {

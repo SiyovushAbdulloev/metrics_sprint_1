@@ -17,7 +17,7 @@ func Main(cf *config.Config) {
 		panic(err)
 	}
 
-	db := memory.NewDB(make([]entity.Metric, 0))
+	db := memory.NewDB(make([]entity.Metrics, 0))
 	metricRepository := memory.NewMetricRepository(db)
 	metricUC := metricUseCase.New(metricRepository)
 	metricHl := metricHandler.New(metricUC, l)

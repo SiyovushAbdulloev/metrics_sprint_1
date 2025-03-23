@@ -19,6 +19,6 @@ func DefineMetricRoutes(app *gin.Engine, metricHl *metricHandler.Handler, l logg
 	app.Use(middleware.Logger(l))
 
 	app.GET("/", metricHl.GetMetrics)
-	app.GET("/value/:type/:name", metricHl.GetMetric)
-	app.POST("/update/:type/:name/:value", metricHl.StoreMetric)
+	app.POST("/value", metricHl.GetMetric)
+	app.POST("/update", metricHl.StoreMetric)
 }
