@@ -18,3 +18,11 @@ func NewMetricService(storage database.MetricStorage) MetricService {
 func (ms MetricService) StoreMetric(metric models.Metric) bool {
 	return ms.Storage.StoreMetric(metric)
 }
+
+func (ms MetricService) GetMetric(metricType string, metricName string) (models.Metric, bool) {
+	return ms.Storage.GetMetric(metricType, metricName)
+}
+
+func (ms MetricService) GetMetrics() []models.Metric {
+	return ms.Storage.GetMetrics()
+}

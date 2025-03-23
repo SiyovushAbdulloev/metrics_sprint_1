@@ -77,3 +77,17 @@ func (ms *MetricStorage) StoreMetric(metric models.Metric) bool {
 		return false
 	}
 }
+
+func (ms MetricStorage) GetMetric(metricType string, metricName string) (models.Metric, bool) {
+	for _, m := range ms.DB.data {
+		if m.Name == metricName && string(m.Type) == metricType {
+			return m, true
+		}
+	}
+
+	return models.Metric{}, false
+}
+
+func (ms MetricStorage) GetMetrics() []models.Metric {
+	return ms.DB.data
+}

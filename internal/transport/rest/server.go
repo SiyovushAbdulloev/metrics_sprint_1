@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/database"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/services"
-	"net/http"
+	"github.com/gin-gonic/gin"
+	"path/filepath"
+	"runtime"
 )
 
 type Server struct {
@@ -27,11 +29,19 @@ func NewServer(host string, port int16, service services.MetricService) *Server 
 }
 
 func (s *Server) Run() (bool, error) {
-	mux := http.NewServeMux()
+	server := gin.Default()
 
-	mux.HandleFunc("POST /update/{type}/{name}/{value}", s.StoreMetric)
+	_, b, _, _ := runtime.Caller(0)                                       // Get the current file path
+	basePath := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(b)))) // Go up 3 levels
+	templatesPath := filepath.Join(basePath, "templates", "*.html")
 
-	err := http.ListenAndServe(s.Addr(), mux)
+	server.LoadHTMLGlob(templatesPath)
+	server.GET("/", s.GetMetrics)
+	server.GET("/value/:type/:name", s.GetMetric)
+	server.POST("/update/:type/:name/:value", s.StoreMetric)
+
+	err := server.Run(s.Addr())
+
 	if err != nil {
 		return false, err
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/database/memory"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/models"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -13,6 +14,8 @@ import (
 )
 
 func TestServer_StoreMetric(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
 	type want struct {
 		Code        int
 		Response    string
@@ -38,7 +41,7 @@ func TestServer_StoreMetric(t *testing.T) {
 			want: want{
 				Code:        http.StatusOK,
 				Response:    "OK",
-				ContentType: "text/plain",
+				ContentType: "text/plain; charset=utf-8",
 			},
 		},
 		{
@@ -51,7 +54,7 @@ func TestServer_StoreMetric(t *testing.T) {
 			want: want{
 				Code:        http.StatusOK,
 				Response:    "OK",
-				ContentType: "text/plain",
+				ContentType: "text/plain; charset=utf-8",
 			},
 		},
 		{
@@ -63,7 +66,7 @@ func TestServer_StoreMetric(t *testing.T) {
 			},
 			want: want{
 				Code:        http.StatusBadRequest,
-				Response:    "invalid type\n",
+				Response:    "invalid type",
 				ContentType: "text/plain; charset=utf-8",
 			},
 		},
@@ -76,7 +79,7 @@ func TestServer_StoreMetric(t *testing.T) {
 			},
 			want: want{
 				Code:        http.StatusBadRequest,
-				Response:    "invalid value\n",
+				Response:    "invalid value",
 				ContentType: "text/plain; charset=utf-8",
 			},
 		},
@@ -86,17 +89,16 @@ func TestServer_StoreMetric(t *testing.T) {
 	mockMetricStorage := memory.NewMockMetricStorage(db)
 	server := InitApp(&mockMetricStorage)
 
+	router := gin.Default()
+	router.POST("/update/:type/:name/:value", server.StoreMetric)
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			addr := fmt.Sprintf("/update/%s/%s/%v", tt.metric.Type, tt.metric.Name, tt.metric.Value)
-			fmt.Printf("Address: %s\n", addr)
 			request := httptest.NewRequest(http.MethodPost, addr, nil)
 			w := httptest.NewRecorder()
 
-			mux := http.NewServeMux()
-			mux.HandleFunc("POST /update/{type}/{name}/{value}", server.StoreMetric)
-			mux.ServeHTTP(w, request)
-			//server.StoreMetric(w, request)
+			router.ServeHTTP(w, request)
 
 			res := w.Result()
 
