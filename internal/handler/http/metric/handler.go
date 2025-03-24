@@ -1,6 +1,8 @@
 package metric
 
 import (
+	"bufio"
+	"bytes"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase"
 	error2 "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/error"
@@ -9,6 +11,7 @@ import (
 	"github.com/mailru/easyjson"
 	"io"
 	"net/http"
+	"os"
 )
 
 type Handler struct {
@@ -101,4 +104,61 @@ func (h *Handler) GetMetrics(ctx *gin.Context) {
 	ctx.HTML(http.StatusOK, "index.html", gin.H{
 		"data": h.uc.GetMetrics(),
 	})
+}
+
+func (h *Handler) StoreInFile(filepath string) {
+	file, err := os.OpenFile(filepath, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		h.l.Info("Error opening file: %v", "err", err)
+		return
+	}
+
+	defer file.Close()
+	var data bytes.Buffer
+	metrics := h.uc.GetMetrics()
+	for _, metric := range metrics {
+		d, err := easyjson.Marshal(metric)
+		if err != nil {
+			h.l.Info("Error marshalling metric: %v", "err", err)
+			break
+		}
+
+		d = append(d, '\n')
+
+		data.Write(d)
+	}
+	file.Write(data.Bytes())
+}
+
+func (h *Handler) RestoreFromFile(filepath string) {
+	file, err := os.ReadFile(filepath)
+	if err != nil {
+		h.l.Info("Error opening file: %v", "err", err)
+		return
+	}
+
+	var metrics []entity.Metrics
+	scanner := bufio.NewScanner(bytes.NewReader(file))
+
+	for scanner.Scan() {
+		metric := entity.Metrics{}
+		err = easyjson.Unmarshal([]byte(scanner.Text()), &metric)
+		if err != nil {
+			h.l.Info("Error unmarshalling metric: %v", "err", err)
+			continue
+		}
+
+		metrics = append(metrics, metric)
+	}
+
+	if err = scanner.Err(); err != nil {
+		h.l.Info("Error reading file: %v", "err", err)
+		return
+	}
+
+	stored := h.uc.StoreAll(metrics)
+
+	if !stored {
+		h.l.Info("Error storing metrics")
+	}
 }
