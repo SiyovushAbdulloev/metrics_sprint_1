@@ -2,8 +2,10 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,10 +15,10 @@ import (
 )
 
 type Metric struct {
-	ID    string
-	MType string
-	Value float64
-	Delta int64
+	ID    string  `json:"id"`
+	MType string  `json:"type"`
+	Value float64 `json:"value"`
+	Delta int64   `json:"delta"`
 }
 
 type Metrics struct {
@@ -192,9 +194,32 @@ func sendMetrics(client http.Client, m Metrics, address string) {
 			log.Printf("Error marshaling metric: %v", err)
 			return
 		}
-		body := bytes.NewBuffer(data)
 
-		res, err := client.Post("http://localhost:8080/update", "application/json", body)
+		var buffer bytes.Buffer
+		gzipW, err := gzip.NewWriterLevel(&buffer, gzip.BestCompression)
+		if err != nil {
+			fmt.Printf("Error creating gzip writer: %v", err)
+			return
+		}
+
+		_, err = gzipW.Write(data)
+		if err != nil {
+			fmt.Printf("Error writing metric: %v", err)
+			return
+		}
+
+		gzipW.Close()
+
+		req, err := http.NewRequest("POST", fmt.Sprintf("http://%s/%s", address, "update"), &buffer)
+		if err != nil {
+			fmt.Printf("Error creating request: %v", err)
+			return
+		}
+
+		req.Header.Set("Content-Encoding", "gzip")
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("Content-Type", "application/json")
+		res, err := client.Do(req)
 		if err != nil {
 			log.Printf("Error posting metric: %v", err)
 		}
@@ -203,13 +228,15 @@ func sendMetrics(client http.Client, m Metrics, address string) {
 	}
 }
 
-func getVars() Config {
+func getConfig() Config {
 	var address string
 	var reportInterval int
 	var pollInterval int
+
 	addr := os.Getenv("ADDRESS")
 	reportInt := os.Getenv("REPORT_INTERVAL")
 	pollInt := os.Getenv("POLL_INTERVAL")
+
 	addrFlag := flag.String("a", "localhost:8080", "The address to send HTTP requests.")
 	reportIntFlag := flag.Int("r", 10, "The interval in seconds between metric reporting. (in seconds)")
 	pollIntFlag := flag.Int("p", 2, "The interval in seconds between metric polling. (in seconds)")
@@ -249,7 +276,7 @@ func getVars() Config {
 }
 
 func main() {
-	config := getVars()
+	config := getConfig()
 	client := http.Client{}
 	m := Metrics{}
 	collectTicker := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
