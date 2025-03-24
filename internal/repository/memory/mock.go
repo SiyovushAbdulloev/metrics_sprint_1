@@ -89,3 +89,9 @@ func (mms MockMetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics
 func (mms MockMetricRepository) GetMetrics() []entity.Metrics {
 	return mms.DB.data
 }
+
+func (mms MockMetricRepository) StoreAll(metrics []entity.Metrics) bool {
+	mms.DB.data = metrics
+
+	return true
+}
