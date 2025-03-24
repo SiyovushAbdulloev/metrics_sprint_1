@@ -88,3 +88,9 @@ func (ms MetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics, boo
 func (ms MetricRepository) GetMetrics() []entity.Metrics {
 	return ms.DB.data
 }
+
+func (ms MetricRepository) StoreAll(metrics []entity.Metrics) bool {
+	ms.DB.data = metrics
+
+	return true
+}

@@ -24,3 +24,7 @@ func (uc UseCase) GetMetric(metric entity.Metrics) (entity.Metrics, bool) {
 func (uc UseCase) GetMetrics() []entity.Metrics {
 	return uc.repo.GetMetrics()
 }
+
+func (uc UseCase) StoreAll(metrics []entity.Metrics) bool {
+	return uc.repo.StoreAll(metrics)
+}
