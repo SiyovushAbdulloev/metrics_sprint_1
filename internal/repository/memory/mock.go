@@ -2,10 +2,11 @@ package memory
 
 import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
+	"strings"
 )
 
 type MockMemStorage struct {
-	data []entity.Metric
+	data []entity.Metrics
 }
 
 type MockMetricRepository struct {
@@ -18,22 +19,23 @@ func NewMockMetricRepository(db MockMemStorage) MockMetricRepository {
 	}
 }
 
-func NewMockDB(data []entity.Metric) MockMemStorage {
+func NewMockDB(data []entity.Metrics) MockMemStorage {
 	return MockMemStorage{
 		data: data,
 	}
 }
 
-func (mms MockMetricRepository) StoreMetric(metric entity.Metric) bool {
-	switch metric.Type {
+func (mms MockMetricRepository) StoreMetric(metric entity.Metrics) entity.Metrics {
+	data := mms.DB.data
+
+	switch metric.MType {
 	case entity.Gauge:
-		data := mms.DB.data
 		if len(data) == 0 {
 			data = append(data, metric)
 		} else {
 			notFound := true
 			for k, v := range data {
-				if v.Name == metric.Name {
+				if v.ID == metric.ID {
 					notFound = false
 					data[k] = metric
 				}
@@ -45,24 +47,20 @@ func (mms MockMetricRepository) StoreMetric(metric entity.Metric) bool {
 		}
 
 		mms.DB.data = data
-		return true
+		return metric
 	case entity.Counter:
-		data := mms.DB.data
-
 		if len(data) == 0 {
 			data = append(data, metric)
 		} else {
 			notFound := true
 			for k, v := range data {
-				if v.Name == metric.Name {
+				if v.ID == metric.ID {
 					notFound = false
-					newValue := metric.Value.(int64)
-					previousValue := v.Value.(int64)
-					data[k] = entity.Metric{
-						Name:  metric.Name,
-						Type:  metric.Type,
-						Value: newValue + previousValue,
+					if metric.Delta != nil && v.Delta != nil {
+						newValue := *metric.Delta + *v.Delta
+						metric.Delta = &newValue
 					}
+					data[k] = metric
 				}
 			}
 
@@ -72,22 +70,22 @@ func (mms MockMetricRepository) StoreMetric(metric entity.Metric) bool {
 		}
 
 		mms.DB.data = data
-		return true
+		return metric
 	default:
-		return false
+		return entity.Metrics{}
 	}
 }
 
-func (mms MockMetricRepository) GetMetric(metricType string, metricName string) (entity.Metric, bool) {
+func (mms MockMetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics, bool) {
 	for _, m := range mms.DB.data {
-		if m.Name == metricName && string(m.Type) == metricType {
+		if m.ID == strings.ToLower(metric.ID) && m.MType == metric.MType {
 			return m, true
 		}
 	}
 
-	return entity.Metric{}, false
+	return entity.Metrics{}, false
 }
 
-func (mms MockMetricRepository) GetMetrics() []entity.Metric {
+func (mms MockMetricRepository) GetMetrics() []entity.Metrics {
 	return mms.DB.data
 }
