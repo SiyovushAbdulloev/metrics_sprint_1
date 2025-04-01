@@ -17,6 +17,7 @@ func DefineMetricRoutes(app *gin.Engine, metricHl *metricHandler.Handler, l logg
 	app.LoadHTMLGlob(templatesPath)
 
 	app.Use(middleware.Logger(l))
+	app.Use(middleware.Compress())
 
 	app.GET("/", metricHl.GetMetrics)
 	app.GET("/value/:type/:name", metricHl.OldGetMetric)
