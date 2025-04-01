@@ -1,8 +1,6 @@
 package metric
 
-import (
-	"strconv"
-)
+import "strconv"
 
 func (h *Handler) validValue(metricType string, value string) (any, bool) {
 	switch metricType {

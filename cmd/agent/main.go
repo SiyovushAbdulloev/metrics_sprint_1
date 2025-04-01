@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"runtime"
@@ -12,13 +15,20 @@ import (
 )
 
 type Metric struct {
-	Name  string
-	Type  string
-	Value any
+	ID    string   `json:"id"`
+	MType string   `json:"type"`
+	Value *float64 `json:"value,omitempty"`
+	Delta *int64   `json:"delta,omitempty"`
 }
 
 type Metrics struct {
 	data []Metric
+}
+
+type Config struct {
+	Address        string
+	ReportInterval int
+	PollInterval   int
 }
 
 func collectMetrics(m *Metrics) {
@@ -28,149 +38,183 @@ func collectMetrics(m *Metrics) {
 	var counter int64 = 1
 
 	if length := len(m.data); length > 0 {
-		counter = m.data[len(m.data)-1].Value.(int64) + 1
+		counter = *(m.data[len(m.data)-1].Delta) + 1
 	}
+
+	alloc := float64(rtm.Alloc)
+	buckHashSys := float64(rtm.BuckHashSys)
+	frees := float64(rtm.Frees)
+	gccpuFraction := float64(rtm.GCCPUFraction)
+	heapAlloc := float64(rtm.HeapAlloc)
+	heapInUse := float64(rtm.HeapInuse)
+	heapObjects := float64(rtm.HeapObjects)
+	heapReleased := float64(rtm.HeapReleased)
+	heapSys := float64(rtm.HeapSys)
+	lastGc := float64(rtm.LastGC)
+	lookups := float64(rtm.Lookups)
+	mCacheInUse := float64(rtm.MCacheInuse)
+	mCacheSys := float64(rtm.MCacheSys)
+	mSpanInuse := float64(rtm.MSpanInuse)
+	mSpanSys := float64(rtm.MSpanSys)
+	mallocs := float64(rtm.Mallocs)
+	nextGC := float64(rtm.NextGC)
+	numForcedGC := float64(rtm.NumForcedGC)
+	numGC := float64(rtm.NumGC)
+	otherSys := float64(rtm.OtherSys)
+	pauseTotalNs := float64(rtm.PauseTotalNs)
+	stackInUse := float64(rtm.StackInuse)
+	stackSys := float64(rtm.StackSys)
+	sys := float64(rtm.Sys)
+	totalAlloc := float64(rtm.TotalAlloc)
+	gcSys := float64(rtm.GCSys)
+	heapIdle := float64(rtm.HeapIdle)
+	randomValue := rand.Float64()
 
 	data := []Metric{
 		{
-			Name:  "alloc",
-			Type:  "gauge",
-			Value: float64(rtm.Alloc),
+			ID:    "Alloc",
+			MType: "gauge",
+			Value: &alloc,
 		},
 		{
-			Name:  "buck_hash_sys",
-			Type:  "gauge",
-			Value: float64(rtm.BuckHashSys),
+			ID:    "BuckHashSys",
+			MType: "gauge",
+			Value: &buckHashSys,
 		},
 		{
-			Name:  "frees",
-			Type:  "gauge",
-			Value: float64(rtm.Frees),
+			ID:    "Frees",
+			MType: "gauge",
+			Value: &frees,
 		},
 		{
-			Name:  "gccpu_fraction",
-			Type:  "gauge",
-			Value: float64(rtm.GCCPUFraction),
+			ID:    "GCCPUFraction",
+			MType: "gauge",
+			Value: &gccpuFraction,
 		},
 		{
-			Name:  "heap_alloc",
-			Type:  "gauge",
-			Value: float64(rtm.HeapAlloc),
+			ID:    "HeapAlloc",
+			MType: "gauge",
+			Value: &heapAlloc,
 		},
 		{
-			Name:  "heap_idle",
-			Type:  "gauge",
-			Value: float64(rtm.HeapIdle),
+			ID:    "HeapInuse",
+			MType: "gauge",
+			Value: &heapInUse,
 		},
 		{
-			Name:  "heap_inuse",
-			Type:  "gauge",
-			Value: float64(rtm.HeapInuse),
+			ID:    "HeapObjects",
+			MType: "gauge",
+			Value: &heapObjects,
 		},
 		{
-			Name:  "heap_objects",
-			Type:  "gauge",
-			Value: float64(rtm.HeapObjects),
+			ID:    "HeapReleased",
+			MType: "gauge",
+			Value: &heapReleased,
 		},
 		{
-			Name:  "heap_released",
-			Type:  "gauge",
-			Value: float64(rtm.HeapReleased),
+			ID:    "HeapSys",
+			MType: "gauge",
+			Value: &heapSys,
 		},
 		{
-			Name:  "heap_sys",
-			Type:  "gauge",
-			Value: float64(rtm.HeapSys),
+			ID:    "LastGC",
+			MType: "gauge",
+			Value: &lastGc,
 		},
 		{
-			Name:  "last_gc",
-			Type:  "gauge",
-			Value: float64(rtm.LastGC),
+			ID:    "Lookups",
+			MType: "gauge",
+			Value: &lookups,
 		},
 		{
-			Name:  "lookups",
-			Type:  "gauge",
-			Value: float64(rtm.Lookups),
+			ID:    "MCacheInuse",
+			MType: "gauge",
+			Value: &mCacheInUse,
 		},
 		{
-			Name:  "mcache_inuse",
-			Type:  "gauge",
-			Value: float64(rtm.MCacheInuse),
+			ID:    "MCacheSys",
+			MType: "gauge",
+			Value: &mCacheSys,
 		},
 		{
-			Name:  "m_cache_sys",
-			Type:  "gauge",
-			Value: float64(rtm.MCacheSys),
+			ID:    "MSpanInuse",
+			MType: "gauge",
+			Value: &mSpanInuse,
 		},
 		{
-			Name:  "mspan_inuse",
-			Type:  "gauge",
-			Value: float64(rtm.MSpanInuse),
+			ID:    "MSpanSys",
+			MType: "gauge",
+			Value: &mSpanSys,
 		},
 		{
-			Name:  "mspan_sys",
-			Type:  "gauge",
-			Value: float64(rtm.MSpanSys),
+			ID:    "Mallocs",
+			MType: "gauge",
+			Value: &mallocs,
 		},
 		{
-			Name:  "mallocs",
-			Type:  "gauge",
-			Value: float64(rtm.Mallocs),
+			ID:    "NextGC",
+			MType: "gauge",
+			Value: &nextGC,
 		},
 		{
-			Name:  "next_gc",
-			Type:  "gauge",
-			Value: float64(rtm.NextGC),
+			ID:    "NumForcedGC",
+			MType: "gauge",
+			Value: &numForcedGC,
 		},
 		{
-			Name:  "num_forced_gc",
-			Type:  "gauge",
-			Value: float64(rtm.NumForcedGC),
+			ID:    "NumGC",
+			MType: "gauge",
+			Value: &numGC,
 		},
 		{
-			Name:  "num_gc",
-			Type:  "gauge",
-			Value: float64(rtm.NumGC),
+			ID:    "OtherSys",
+			MType: "gauge",
+			Value: &otherSys,
 		},
 		{
-			Name:  "other_sys",
-			Type:  "gauge",
-			Value: float64(rtm.OtherSys),
+			ID:    "PauseTotalNs",
+			MType: "gauge",
+			Value: &pauseTotalNs,
 		},
 		{
-			Name:  "pause_totalns",
-			Type:  "gauge",
-			Value: float64(rtm.PauseTotalNs),
+			ID:    "StackInuse",
+			MType: "gauge",
+			Value: &stackInUse,
 		},
 		{
-			Name:  "stack_inuse",
-			Type:  "gauge",
-			Value: float64(rtm.StackInuse),
+			ID:    "StackSys",
+			MType: "gauge",
+			Value: &stackSys,
 		},
 		{
-			Name:  "stack_sys",
-			Type:  "gauge",
-			Value: float64(rtm.StackSys),
+			ID:    "Sys",
+			MType: "gauge",
+			Value: &sys,
 		},
 		{
-			Name:  "sys",
-			Type:  "gauge",
-			Value: float64(rtm.Sys),
+			ID:    "TotalAlloc",
+			MType: "gauge",
+			Value: &totalAlloc,
 		},
 		{
-			Name:  "total_alloc",
-			Type:  "gauge",
-			Value: float64(rtm.TotalAlloc),
+			ID:    "GCSys",
+			MType: "gauge",
+			Value: &gcSys,
 		},
 		{
-			Name:  "random_value",
-			Type:  "gauge",
-			Value: float64(1),
+			ID:    "HeapIdle",
+			MType: "gauge",
+			Value: &heapIdle,
 		},
 		{
-			Name:  "poll_count",
-			Type:  "counter",
-			Value: counter,
+			ID:    "RandomValue",
+			MType: "gauge",
+			Value: &randomValue,
+		},
+		{
+			ID:    "PollCount",
+			MType: "counter",
+			Delta: &counter,
 		},
 	}
 
@@ -179,17 +223,25 @@ func collectMetrics(m *Metrics) {
 
 func sendMetrics(client http.Client, m Metrics, address string) {
 	for _, metric := range m.data {
-		addr := fmt.Sprintf("http://%s/update/%s/%s/%v", address, metric.Type, metric.Name, metric.Value)
-		res, err := client.Post(addr, "text/plain", nil)
+		data, err := json.Marshal(metric)
+		if err != nil {
+			log.Printf("Error marshaling metric: %v", err)
+			return
+		}
+		body := bytes.NewBuffer(data)
+
+		res, err := client.Post(fmt.Sprintf("http://%s/update/", address), "application/json", body)
 		if err != nil {
 			log.Printf("Error posting metric: %v", err)
 		}
 
-		res.Body.Close()
+		if err == nil {
+			res.Body.Close()
+		}
 	}
 }
 
-func getVars() (string, int, int) {
+func getVars() Config {
 	var address string
 	var reportInterval int
 	var pollInterval int
@@ -227,15 +279,19 @@ func getVars() (string, int, int) {
 		pollInterval = value
 	}
 
-	return address, reportInterval, pollInterval
+	return Config{
+		Address:        address,
+		ReportInterval: reportInterval,
+		PollInterval:   pollInterval,
+	}
 }
 
 func main() {
-	address, reportInterval, pollInterval := getVars()
+	config := getVars()
 	client := http.Client{}
 	m := Metrics{}
-	collectTicker := time.NewTicker(time.Duration(pollInterval) * time.Second)
-	sendTicker := time.NewTicker(time.Duration(reportInterval) * time.Second)
+	collectTicker := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
+	sendTicker := time.NewTicker(time.Duration(config.ReportInterval) * time.Second)
 	defer collectTicker.Stop()
 	defer sendTicker.Stop()
 
@@ -245,7 +301,7 @@ func main() {
 			case <-collectTicker.C:
 				collectMetrics(&m)
 			case <-sendTicker.C:
-				sendMetrics(client, m, address)
+				sendMetrics(client, m, config.Address)
 			}
 		}
 	}()

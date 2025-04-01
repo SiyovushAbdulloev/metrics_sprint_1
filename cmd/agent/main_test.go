@@ -14,8 +14,8 @@ func TestCollectMetrics(t *testing.T) {
 
 	var pollCount int64
 	for _, metric := range m.data {
-		if metric.Name == "poll_count" {
-			pollCount = metric.Value.(int64)
+		if metric.ID == "PollCount" {
+			pollCount = *metric.Delta
 			break
 		}
 	}
@@ -24,8 +24,8 @@ func TestCollectMetrics(t *testing.T) {
 
 	collectMetrics(&m)
 	for _, metric := range m.data {
-		if metric.Name == "poll_count" {
-			pollCount = metric.Value.(int64)
+		if metric.ID == "PollCount" {
+			pollCount = *metric.Delta
 			break
 		}
 	}

@@ -1,8 +1,7 @@
 package metric
 
 import (
-	"bytes"
-	"encoding/json"
+	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/repository/memory"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/metric"
@@ -15,19 +14,18 @@ import (
 	"testing"
 )
 
-func TestServer_StoreMetric(t *testing.T) {
+func TestServer_OldStoreMetric(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	type want struct {
 		Code        int
-		Response    any
+		Response    string
 		ContentType string
 	}
 	type Metric struct {
-		ID    string  `json:"id"`
-		MType string  `json:"type"`
-		Delta int64   `json:"delta"`
-		Value float64 `json:"value"`
+		Type  string
+		Name  string
+		Value any
 	}
 	tests := []struct {
 		name   string
@@ -37,40 +35,53 @@ func TestServer_StoreMetric(t *testing.T) {
 		{
 			name: "Storing alloc",
 			metric: Metric{
-				MType: entity.Gauge,
-				ID:    "alloc",
+				Type:  entity.Gauge,
+				Name:  "alloc",
 				Value: 1234.32,
 			},
 			want: want{
 				Code:        http.StatusOK,
-				Response:    "{\"id\":\"alloc\",\"type\":\"gauge\",\"delta\":0,\"value\":1234.32}",
-				ContentType: "application/json; charset=utf-8",
+				Response:    "OK",
+				ContentType: "text/plain; charset=utf-8",
 			},
 		},
 		{
 			name: "Storing counter",
 			metric: Metric{
-				MType: entity.Counter,
-				ID:    "counter",
-				Delta: 12,
+				Type:  entity.Counter,
+				Name:  "counter",
+				Value: 12,
 			},
 			want: want{
 				Code:        http.StatusOK,
-				Response:    "{\"id\":\"counter\",\"type\":\"counter\",\"delta\":12,\"value\":0}",
-				ContentType: "application/json; charset=utf-8",
+				Response:    "OK",
+				ContentType: "text/plain; charset=utf-8",
 			},
 		},
 		{
 			name: "Storing unknown type",
 			metric: Metric{
-				MType: "counter_2",
-				ID:    "anything",
+				Type:  "counter_2",
+				Name:  "anything",
 				Value: 12,
 			},
 			want: want{
 				Code:        http.StatusBadRequest,
-				Response:    "{\"message\":\"invalid type\"}",
-				ContentType: "application/json; charset=utf-8",
+				Response:    "invalid type",
+				ContentType: "text/plain; charset=utf-8",
+			},
+		},
+		{
+			name: "Storing invalid value",
+			metric: Metric{
+				Type:  entity.Counter,
+				Name:  "counter",
+				Value: "12asdf",
+			},
+			want: want{
+				Code:        http.StatusBadRequest,
+				Response:    "invalid value",
+				ContentType: "text/plain; charset=utf-8",
 			},
 		},
 	}
@@ -81,13 +92,12 @@ func TestServer_StoreMetric(t *testing.T) {
 	hl := New(metricUC, nil)
 
 	router := gin.Default()
-	router.POST("/update", hl.StoreMetric)
+	router.POST("/update/:type/:name/:value", hl.OldStoreMetric)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			data, _ := json.Marshal(tt.metric)
-			body := bytes.NewBuffer(data)
-			request := httptest.NewRequest(http.MethodPost, "/update", body)
+			addr := fmt.Sprintf("/update/%s/%s/%v", tt.metric.Type, tt.metric.Name, tt.metric.Value)
+			request := httptest.NewRequest(http.MethodPost, addr, nil)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, request)
