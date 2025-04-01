@@ -9,8 +9,7 @@ import (
 	metricUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/httpserver"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
-	"log"
-	"os"
+	"time"
 )
 
 func Main(cf *config.Config) {
@@ -27,12 +26,31 @@ func Main(cf *config.Config) {
 	httpServer := httpserver.New(httpserver.WithAddress(cf.Server.Address))
 	http.DefineMetricRoutes(httpServer.App, metricHl, l)
 
-	log.SetOutput(os.Stdout)
-	log.Println("Starting server on " + cf.Server.Address)
-	err = httpServer.Start()
-	log.Println("Starting failed with error: ", err)
+	l.Info("Config", "config", cf)
 
-	if err != nil {
-		panic(err)
+	if cf.App.Restore {
+		err = metricHl.RestoreFromFile(cf.App.Filepath)
+		if err != nil {
+			panic(err)
+		}
 	}
+
+	go func() {
+		err = httpServer.Start()
+
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	storeTicker := time.NewTicker(time.Second * time.Duration(cf.App.StoreInterval))
+	defer storeTicker.Stop()
+
+	go func() {
+		for range storeTicker.C {
+			metricHl.StoreInFile(cf.App.Filepath)
+		}
+	}()
+
+	select {}
 }
