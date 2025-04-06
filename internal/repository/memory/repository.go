@@ -2,6 +2,7 @@ package memory
 
 import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
+	err "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/error"
 )
 
 type MemStorage struct {
@@ -24,7 +25,7 @@ func NewDB(data []entity.Metrics) MemStorage {
 	}
 }
 
-func (ms MetricRepository) StoreMetric(metric entity.Metrics) entity.Metrics {
+func (ms MetricRepository) StoreMetric(metric entity.Metrics) (entity.Metrics, error) {
 	data := ms.DB.data
 
 	switch metric.MType {
@@ -46,7 +47,7 @@ func (ms MetricRepository) StoreMetric(metric entity.Metrics) entity.Metrics {
 		}
 
 		ms.DB.data = data
-		return metric
+		return metric, nil
 	case entity.Counter:
 		if len(data) == 0 {
 			data = append(data, metric)
@@ -69,30 +70,30 @@ func (ms MetricRepository) StoreMetric(metric entity.Metrics) entity.Metrics {
 		}
 
 		ms.DB.data = data
-		return metric
+		return metric, nil
 	default:
-		return entity.Metrics{}
+		return entity.Metrics{}, err.ErrInvalidType
 	}
 }
 
-func (ms MetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics, bool) {
+func (ms MetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics, error) {
 	for _, m := range ms.DB.data {
 		if m.ID == metric.ID && m.MType == metric.MType {
-			return m, true
+			return m, nil
 		}
 	}
 
-	return entity.Metrics{}, false
+	return entity.Metrics{}, err.ErrNotFound
 }
 
-func (ms MetricRepository) GetMetrics() []entity.Metrics {
-	return ms.DB.data
+func (ms MetricRepository) GetMetrics() ([]entity.Metrics, error) {
+	return ms.DB.data, nil
 }
 
-func (ms MetricRepository) StoreAll(metrics []entity.Metrics) bool {
+func (ms MetricRepository) StoreAll(metrics []entity.Metrics) error {
 	ms.DB.data = metrics
 
-	return true
+	return nil
 }
 
 func (ms MetricRepository) Check() error {

@@ -55,7 +55,8 @@ func New() (*Config, error) {
 	fpFlag := flag.String("f", "storage.txt", "The filepath where will be stored data from storage.")
 
 	db := os.Getenv("DATABASE_DSN")
-	dbFlag := flag.String("d", "postgres://postgres:postgres@localhost:5432/metrics", "The dsn of postgesql.")
+	//postgres://postgres:postgres@localhost:5432/metrics
+	dbFlag := flag.String("d", "", "The dsn of postgresql.")
 
 	flag.Parse()
 
