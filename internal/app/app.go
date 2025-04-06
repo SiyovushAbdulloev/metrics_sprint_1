@@ -4,12 +4,12 @@ import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http"
-	checkHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/check_db"
 	metricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/metric"
+	postgresMetricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/postgres_metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/repository/memory"
 	postgresRepo "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/repository/postgres"
-	checkUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/check_db"
 	metricUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/metric"
+	postgresMetricUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/postgres_metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/httpserver"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/postgres"
@@ -31,13 +31,17 @@ func Main(cf *config.Config) {
 	metricRepository := memory.NewMetricRepository(db)
 	pgRepo := postgresRepo.NewMetricRepository(postgresDB)
 	metricUC := metricUseCase.New(metricRepository)
-	checkUC := checkUseCase.New(pgRepo)
+	postgresUC := postgresMetricUseCase.New(pgRepo)
 	metricHl := metricHandler.New(metricUC, l)
-	checkHl := checkHandler.New(checkUC, l)
+	postgresHl := postgresMetricHandler.New(postgresUC, l)
 
 	httpServer := httpserver.New(httpserver.WithAddress(cf.Server.Address))
-	http.DefineMetricRoutes(httpServer.App, metricHl, l)
-	http.DefineCheckRoutes(httpServer.App, checkHl, l)
+
+	if cf.Database.DSN != "" {
+		http.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l)
+	} else {
+		http.DefineMetricRoutes(httpServer.App, metricHl, l)
+	}
 
 	if cf.App.Restore {
 		err = metricHl.RestoreFromFile(cf.App.Filepath)

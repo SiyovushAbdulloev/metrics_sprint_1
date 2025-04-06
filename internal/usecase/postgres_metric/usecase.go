@@ -13,19 +13,19 @@ func New(repo repository.MetricRepository) *UseCase {
 	return &UseCase{repo: repo}
 }
 
-func (uc UseCase) StoreMetric(metric entity.Metrics) entity.Metrics {
+func (uc UseCase) StoreMetric(metric entity.Metrics) (entity.Metrics, error) {
 	return uc.repo.StoreMetric(metric)
 }
 
-func (uc UseCase) GetMetric(metric entity.Metrics) (entity.Metrics, bool) {
+func (uc UseCase) GetMetric(metric entity.Metrics) (entity.Metrics, error) {
 	return uc.repo.GetMetric(metric)
 }
 
-func (uc UseCase) GetMetrics() []entity.Metrics {
+func (uc UseCase) GetMetrics() ([]entity.Metrics, error) {
 	return uc.repo.GetMetrics()
 }
 
-func (uc UseCase) StoreAll(metrics []entity.Metrics) bool {
+func (uc UseCase) StoreAll(metrics []entity.Metrics) error {
 	return uc.repo.StoreAll(metrics)
 }
 

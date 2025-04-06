@@ -2,6 +2,7 @@ package memory
 
 import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
+	err "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/error"
 	"strings"
 )
 
@@ -25,7 +26,7 @@ func NewMockDB(data []entity.Metrics) MockMemStorage {
 	}
 }
 
-func (mms MockMetricRepository) StoreMetric(metric entity.Metrics) entity.Metrics {
+func (mms MockMetricRepository) StoreMetric(metric entity.Metrics) (entity.Metrics, error) {
 	data := mms.DB.data
 
 	switch metric.MType {
@@ -47,7 +48,7 @@ func (mms MockMetricRepository) StoreMetric(metric entity.Metrics) entity.Metric
 		}
 
 		mms.DB.data = data
-		return metric
+		return metric, nil
 	case entity.Counter:
 		if len(data) == 0 {
 			data = append(data, metric)
@@ -70,30 +71,30 @@ func (mms MockMetricRepository) StoreMetric(metric entity.Metrics) entity.Metric
 		}
 
 		mms.DB.data = data
-		return metric
+		return metric, nil
 	default:
-		return entity.Metrics{}
+		return entity.Metrics{}, err.ErrNotFound
 	}
 }
 
-func (mms MockMetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics, bool) {
+func (mms MockMetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics, error) {
 	for _, m := range mms.DB.data {
 		if m.ID == strings.ToLower(metric.ID) && m.MType == metric.MType {
-			return m, true
+			return m, nil
 		}
 	}
 
-	return entity.Metrics{}, false
+	return entity.Metrics{}, nil
 }
 
-func (mms MockMetricRepository) GetMetrics() []entity.Metrics {
-	return mms.DB.data
+func (mms MockMetricRepository) GetMetrics() ([]entity.Metrics, error) {
+	return mms.DB.data, nil
 }
 
-func (mms MockMetricRepository) StoreAll(metrics []entity.Metrics) bool {
+func (mms MockMetricRepository) StoreAll(metrics []entity.Metrics) error {
 	mms.DB.data = metrics
 
-	return true
+	return nil
 }
 
 func (mms MockMetricRepository) Check() error {
