@@ -30,5 +30,5 @@ func (uc UseCase) StoreAll(metrics []entity.Metrics) error {
 }
 
 func (uc UseCase) Check() error {
-	return nil
+	return uc.repo.Check()
 }
