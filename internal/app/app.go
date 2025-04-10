@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http"
@@ -13,6 +14,8 @@ import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/httpserver"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/postgres"
+	_ "github.com/lib/pq"
+	"github.com/pressly/goose/v3"
 	"time"
 )
 
@@ -28,6 +31,25 @@ func Main(cf *config.Config) {
 		l.Info("Error connecting to database", "err", err)
 		panic(err)
 	}
+	if cf.Database.DSN != "" {
+		dbMigration, err := sql.Open("postgres", cf.Database.DSN)
+		if err != nil {
+			l.Info("failed to open postgres db:", "err", err)
+			panic(err)
+		}
+		defer dbMigration.Close()
+
+		if err = goose.SetDialect("postgres"); err != nil {
+			l.Info("failed to set goose dialect:", "err", err)
+			panic(err)
+		}
+
+		if err = goose.Up(dbMigration, "./migrations"); err != nil {
+			l.Info("failed to migrate goose migrations:", "err", err)
+			panic(err)
+		}
+	}
+
 	metricRepository := memory.NewMetricRepository(db)
 	pgRepo := postgresRepo.NewMetricRepository(postgresDB)
 	metricUC := metricUseCase.New(metricRepository)
