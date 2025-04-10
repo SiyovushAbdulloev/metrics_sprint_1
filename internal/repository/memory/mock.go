@@ -95,3 +95,7 @@ func (mms MockMetricRepository) StoreAll(metrics []entity.Metrics) bool {
 
 	return true
 }
+
+func (mms MockMetricRepository) Check() error {
+	return nil
+}

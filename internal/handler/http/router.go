@@ -1,6 +1,7 @@
 package http
 
 import (
+	checkHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/check_db"
 	metricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/middleware"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
@@ -24,4 +25,11 @@ func DefineMetricRoutes(app *gin.Engine, metricHl *metricHandler.Handler, l logg
 	app.POST("/update/:type/:name/:value", metricHl.OldStoreMetric)
 	app.POST("/value/", metricHl.GetMetric)
 	app.POST("/update/", metricHl.StoreMetric)
+}
+
+func DefineCheckRoutes(app *gin.Engine, checkHl *checkHandler.Handler, l logger.Interface) {
+	app.Use(middleware.Logger(l))
+	app.Use(middleware.Compress())
+
+	app.GET("/ping", checkHl.Check)
 }
