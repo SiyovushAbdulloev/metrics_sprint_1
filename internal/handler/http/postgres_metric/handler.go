@@ -9,9 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mailru/easyjson"
 	"io"
-	"log"
 	"net/http"
-	"os"
 	"strconv"
 )
 
@@ -41,10 +39,8 @@ func (h *Handler) Check(ctx *gin.Context) {
 func (h *Handler) StoreMetric(ctx *gin.Context) {
 	var metric entity.Metrics
 
-	log.SetOutput(os.Stdout)
-
 	body, err := io.ReadAll(ctx.Request.Body)
-	log.Println("Body", string(body))
+
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, errorResponse{
 			Message: error2.ErrSomethingWentWrong.Error(),
@@ -60,8 +56,6 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 		return
 	}
 
-	log.Println("Metric", metric)
-
 	if metric.MType != entity.Gauge && metric.MType != entity.Counter {
 		ctx.JSON(http.StatusBadRequest, errorResponse{
 			Message: error2.ErrInvalidType.Error(),
@@ -71,8 +65,6 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 
 	_, err = h.uc.StoreMetric(metric)
 
-	log.Println("Err:", err)
-
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse{
 			Message: error2.ErrSomethingWentWrong.Error(),
@@ -81,6 +73,19 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, metric)
+}
+
+func (h *Handler) StoreManyMetric(ctx *gin.Context) {
+	//var metrics []entity.Metrics
+	//
+	//body, err := io.ReadAll(ctx.Request.Body)
+	//if err != nil {
+	//	ctx.JSON(http.StatusBadRequest, errorResponse{
+	//		Message: error2.ErrInvalidValue.Error(),
+	//	})
+	//	return
+	//}
+	ctx.JSON(http.StatusOK, gin.H{})
 }
 
 func (h *Handler) OldStoreMetric(ctx *gin.Context) {
