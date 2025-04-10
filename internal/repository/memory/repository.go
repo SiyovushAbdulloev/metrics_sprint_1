@@ -99,3 +99,7 @@ func (ms MetricRepository) StoreAll(metrics []entity.Metrics) error {
 func (ms MetricRepository) Check() error {
 	return nil
 }
+
+func (ms MetricRepository) UpdateAll(metrics []entity.Metrics) error {
+	return nil
+}
