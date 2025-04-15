@@ -7,9 +7,14 @@ import (
 )
 
 type Config struct {
-	Server Server
-	Log    Log
-	App    App
+	Server   Server
+	Log      Log
+	App      App
+	Database Database
+}
+
+type Database struct {
+	DSN string
 }
 
 type App struct {
@@ -32,6 +37,7 @@ func New() (*Config, error) {
 	var restore bool
 	var storeInterval int
 	var filePath string
+	var dsn string
 
 	addr := os.Getenv("ADDRESS")
 	addrFlag := flag.String("a", "localhost:8080", "The address to listen on for HTTP requests.")
@@ -47,6 +53,10 @@ func New() (*Config, error) {
 
 	fp := os.Getenv("FILE_STORAGE_PATH")
 	fpFlag := flag.String("f", "storage.txt", "The filepath where will be stored data from storage.")
+
+	db := os.Getenv("DATABASE_DSN")
+	//postgres://postgres:postgres@localhost:5432/metrics
+	dbFlag := flag.String("d", "", "The dsn of postgresql.")
 
 	flag.Parse()
 
@@ -84,6 +94,12 @@ func New() (*Config, error) {
 		filePath = fp
 	}
 
+	if db == "" {
+		dsn = *dbFlag
+	} else {
+		dsn = db
+	}
+
 	return &Config{
 		Server: Server{
 			Address: address,
@@ -95,6 +111,9 @@ func New() (*Config, error) {
 			StoreInterval: storeInterval,
 			Filepath:      filePath,
 			Restore:       restore,
+		},
+		Database: Database{
+			DSN: dsn,
 		},
 	}, nil
 }
