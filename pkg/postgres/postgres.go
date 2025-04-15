@@ -11,14 +11,12 @@ import (
 
 const (
 	_defaultMaxPoolSize  = 1
-	_defaultConnAttempts = 10
-	_defaultConnTimeout  = time.Second
+	_defaultConnAttempts = 3
 )
 
 type Postgres struct {
 	maxPoolSize  int
 	connAttempts int
-	connTimeout  time.Duration
 
 	Builder squirrel.StatementBuilderType
 	Pool    *pgxpool.Pool
@@ -28,7 +26,6 @@ func New(url string, opts ...Option) (*Postgres, error) {
 	pg := &Postgres{
 		maxPoolSize:  _defaultMaxPoolSize,
 		connAttempts: _defaultConnAttempts,
-		connTimeout:  _defaultConnTimeout,
 	}
 
 	for _, opt := range opts {
@@ -39,7 +36,7 @@ func New(url string, opts ...Option) (*Postgres, error) {
 
 	var err error
 
-	for pg.connAttempts > 0 {
+	for i := 0; i < pg.connAttempts; i++ {
 		pg.Pool, err = pgxpool.New(context.Background(), url)
 		if err == nil {
 			break
@@ -47,9 +44,7 @@ func New(url string, opts ...Option) (*Postgres, error) {
 
 		log.Printf("Postgres is trying to connect, attempts left: %d", pg.connAttempts)
 
-		time.Sleep(pg.connTimeout)
-
-		pg.connAttempts--
+		time.Sleep(time.Second * time.Duration(i*2+1))
 	}
 
 	if err != nil {
