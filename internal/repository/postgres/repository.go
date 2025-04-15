@@ -2,9 +2,12 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"github.com/Masterminds/squirrel"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/postgres"
+	"github.com/jackc/pgx/v5"
+	"log"
 )
 
 type MetricRepository struct {
@@ -112,4 +115,64 @@ func (repo MetricRepository) GetMetrics() ([]entity.Metrics, error) {
 
 func (repo MetricRepository) Check() error {
 	return repo.DB.Pool.Ping(context.Background())
+}
+
+func (repo MetricRepository) UpdateAll(metrics []entity.Metrics) error {
+	ctx := context.Background()
+
+	tx, err := repo.DB.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		log.Printf("Error defer: %v\n", err)
+		if err != nil {
+			_ = tx.Rollback(ctx)
+		} else {
+			err = tx.Commit(ctx)
+		}
+	}()
+
+	query := repo.DB.Builder.Insert("metrics").
+		Columns("id", "type", "delta", "value")
+
+	for _, metric := range metrics {
+		var delta interface{}
+		var value interface{}
+
+		if metric.Delta != nil {
+			oldMetric, err := repo.GetMetric(metric)
+
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if errors.Is(err, pgx.ErrNoRows) {
+				delta = *metric.Delta
+			} else {
+				delta = *oldMetric.Delta + *metric.Delta
+			}
+		} else {
+			delta = nil
+		}
+
+		if metric.Value != nil {
+			value = *metric.Value
+		} else {
+			value = nil
+		}
+
+		query = query.Values(metric.ID, metric.MType, delta, value)
+	}
+
+	query = query.Suffix("ON CONFLICT (id) DO UPDATE SET delta = EXCLUDED.delta, value = EXCLUDED.value")
+
+	sql, args, err := query.ToSql()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, sql, args...)
+
+	return err
 }

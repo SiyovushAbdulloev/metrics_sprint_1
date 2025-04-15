@@ -100,3 +100,7 @@ func (mms MockMetricRepository) StoreAll(metrics []entity.Metrics) error {
 func (mms MockMetricRepository) Check() error {
 	return nil
 }
+
+func (mms MockMetricRepository) UpdateAll(metrics []entity.Metrics) error {
+	return nil
+}

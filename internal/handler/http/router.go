@@ -43,4 +43,5 @@ func DefinePostgresMetricRoutes(app *gin.Engine, checkHl *checkHandler.Handler, 
 	app.POST("/value/", checkHl.GetMetric)
 	app.POST("/update/", checkHl.StoreMetric)
 	app.GET("/ping", checkHl.Check)
+	app.POST("/updates", checkHl.UpdateManyMetric)
 }

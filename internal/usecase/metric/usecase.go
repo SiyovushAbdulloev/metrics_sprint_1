@@ -32,3 +32,7 @@ func (uc UseCase) StoreAll(metrics []entity.Metrics) error {
 func (uc UseCase) Check() error {
 	return nil
 }
+
+func (uc UseCase) UpdateAll(metrics []entity.Metrics) error {
+	return nil
+}
