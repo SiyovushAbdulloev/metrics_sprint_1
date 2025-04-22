@@ -7,5 +7,6 @@ type MetricUseCase interface {
 	StoreAll(metrics []entity.Metrics) error
 	GetMetric(metric entity.Metrics) (entity.Metrics, error)
 	GetMetrics() ([]entity.Metrics, error)
+	UpdateAll(metrics []entity.Metrics) error
 	Check() error
 }

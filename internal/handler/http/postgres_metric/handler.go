@@ -9,9 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mailru/easyjson"
 	"io"
-	"log"
 	"net/http"
-	"os"
+	"slices"
 	"strconv"
 )
 
@@ -41,10 +40,8 @@ func (h *Handler) Check(ctx *gin.Context) {
 func (h *Handler) StoreMetric(ctx *gin.Context) {
 	var metric entity.Metrics
 
-	log.SetOutput(os.Stdout)
-
 	body, err := io.ReadAll(ctx.Request.Body)
-	log.Println("Body", string(body))
+
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, errorResponse{
 			Message: error2.ErrSomethingWentWrong.Error(),
@@ -60,8 +57,6 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 		return
 	}
 
-	log.Println("Metric", metric)
-
 	if metric.MType != entity.Gauge && metric.MType != entity.Counter {
 		ctx.JSON(http.StatusBadRequest, errorResponse{
 			Message: error2.ErrInvalidType.Error(),
@@ -69,9 +64,10 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 		return
 	}
 
+	h.l.Info("Storing metric", "metric", metric)
+	metrics, _ := h.uc.GetMetrics()
+	h.l.Info("AllMetrics", "allMetrics", metrics)
 	_, err = h.uc.StoreMetric(metric)
-
-	log.Println("Err:", err)
 
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse{
@@ -81,6 +77,79 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, metric)
+}
+
+func (h *Handler) UpdateManyMetric(ctx *gin.Context) {
+	var metricsList entity.MetricsList
+
+	body, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse{
+			Message: error2.ErrInvalidValue.Error(),
+		})
+		return
+	}
+
+	err = easyjson.Unmarshal(body, &metricsList)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse{
+			Message: error2.ErrInvalidValue.Error(),
+		})
+		return
+	}
+
+	if len(metricsList) == 0 {
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "Ok",
+		})
+		return
+	}
+
+	metricsIds := make([]string, 0, len(metricsList))
+	newMetrics := make([]entity.Metrics, 0, len(metricsList))
+	counters := make(map[string]int64)
+	for _, m := range metricsList {
+		if m.MType == entity.Counter {
+			prev, ok := counters[m.ID]
+			var delta int64
+			if ok {
+				delta = prev
+			}
+			counters[m.ID] = delta + *m.Delta
+		} else {
+			if !slices.Contains(metricsIds, m.ID) {
+				newMetrics = append(newMetrics, m)
+				metricsIds = append(metricsIds, m.ID)
+			} else {
+				for k, mt := range newMetrics {
+					if mt.ID == m.ID {
+						newMetrics[k] = m
+					}
+				}
+			}
+		}
+	}
+
+	for id, delta := range counters {
+		newMetrics = append(newMetrics, entity.Metrics{
+			MType: entity.Counter,
+			ID:    id,
+			Delta: &delta,
+		})
+	}
+
+	err = h.uc.UpdateAll(newMetrics)
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse{
+			Message: error2.ErrSomethingWentWrong.Error(),
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Ok",
+	})
 }
 
 func (h *Handler) OldStoreMetric(ctx *gin.Context) {
@@ -151,7 +220,11 @@ func (h *Handler) GetMetric(ctx *gin.Context) {
 		return
 	}
 
+	h.l.Info("GetMetric", "metric", metric)
 	m, err := h.uc.GetMetric(metric)
+
+	metrics, _ := h.uc.GetMetrics()
+	h.l.Info("AllMetrics", "allMetrics", metrics)
 
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, errorResponse{
