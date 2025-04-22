@@ -94,3 +94,7 @@ func (ms MetricRepository) StoreAll(metrics []entity.Metrics) bool {
 
 	return true
 }
+
+func (ms MetricRepository) Check() error {
+	return nil
+}
