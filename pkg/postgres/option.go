@@ -1,7 +1,5 @@
 package postgres
 
-import "time"
-
 type Option func(*Postgres)
 
 // MaxPoolSize -.
@@ -15,12 +13,5 @@ func MaxPoolSize(size int) Option {
 func ConnAttempts(attempts int) Option {
 	return func(c *Postgres) {
 		c.connAttempts = attempts
-	}
-}
-
-// ConnTimeout -.
-func ConnTimeout(timeout time.Duration) Option {
-	return func(c *Postgres) {
-		c.connTimeout = timeout
 	}
 }

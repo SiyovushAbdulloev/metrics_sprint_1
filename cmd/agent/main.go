@@ -29,6 +29,7 @@ type Config struct {
 	Address        string
 	ReportInterval int
 	PollInterval   int
+	ConnAttempts   int
 }
 
 func collectMetrics(m *Metrics) {
@@ -221,8 +222,9 @@ func collectMetrics(m *Metrics) {
 	m.data = data
 }
 
-func sendMetrics(client http.Client, m Metrics, address string) {
-	for _, metric := range m.data {
+func sendMetrics(client http.Client, ms []Metric, cfg Config) {
+	for _, metric := range ms {
+		var err error
 		data, err := json.Marshal(metric)
 		if err != nil {
 			log.Printf("Error marshaling metric: %v", err)
@@ -230,13 +232,25 @@ func sendMetrics(client http.Client, m Metrics, address string) {
 		}
 		body := bytes.NewBuffer(data)
 
-		res, err := client.Post(fmt.Sprintf("http://%s/update/", address), "application/json", body)
-		if err != nil {
-			log.Printf("Error posting metric: %v", err)
+		for i := 0; i <= cfg.ConnAttempts; i++ {
+			res, err2 := client.Post(fmt.Sprintf("http://%s/update/", cfg.Address), "application/json", body)
+			err = err2
+			if err2 == nil {
+				res.Body.Close()
+				return
+			}
+
+			if res != nil {
+				res.Body.Close()
+			}
+
+			fmt.Printf("Error: %v\n", err)
+
+			time.Sleep(time.Second * time.Duration(i*2+1))
 		}
 
-		if err == nil {
-			res.Body.Close()
+		if err != nil {
+			log.Printf("Error posting metric: %v", err)
 		}
 	}
 }
@@ -283,6 +297,7 @@ func getVars() Config {
 		Address:        address,
 		ReportInterval: reportInterval,
 		PollInterval:   pollInterval,
+		ConnAttempts:   3,
 	}
 }
 
@@ -301,7 +316,9 @@ func main() {
 			case <-collectTicker.C:
 				collectMetrics(&m)
 			case <-sendTicker.C:
-				sendMetrics(client, m, config.Address)
+				go func(metrics []Metric) {
+					sendMetrics(client, metrics, config)
+				}(append([]Metric(nil), m.data...))
 			}
 		}
 	}()
