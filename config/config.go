@@ -21,6 +21,7 @@ type App struct {
 	StoreInterval int
 	Filepath      string
 	Restore       bool
+	HashKey       string
 }
 
 type Server struct {
@@ -38,6 +39,7 @@ func New() (*Config, error) {
 	var storeInterval int
 	var filePath string
 	var dsn string
+	var hashKey string
 
 	addr := os.Getenv("ADDRESS")
 	addrFlag := flag.String("a", "localhost:8080", "The address to listen on for HTTP requests.")
@@ -57,6 +59,10 @@ func New() (*Config, error) {
 	db := os.Getenv("DATABASE_DSN")
 	//postgres://postgres:postgres@localhost:5432/metrics
 	dbFlag := flag.String("d", "", "The dsn of postgresql.")
+
+	hk := os.Getenv("KEY")
+	//postgres://postgres:postgres@localhost:5432/metrics
+	hkFlag := flag.String("k", "", "The hash key.")
 
 	flag.Parse()
 
@@ -100,6 +106,12 @@ func New() (*Config, error) {
 		dsn = db
 	}
 
+	if hk == "" {
+		hashKey = *hkFlag
+	} else {
+		hashKey = hk
+	}
+
 	return &Config{
 		Server: Server{
 			Address: address,
@@ -111,6 +123,7 @@ func New() (*Config, error) {
 			StoreInterval: storeInterval,
 			Filepath:      filePath,
 			Restore:       restore,
+			HashKey:       hashKey,
 		},
 		Database: Database{
 			DSN: dsn,

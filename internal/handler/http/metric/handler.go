@@ -32,6 +32,7 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 	var metric entity.Metrics
 
 	body, err := io.ReadAll(ctx.Request.Body)
+	fmt.Println("Error before reading all", err)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, errorResponse{
 			Message: error2.ErrSomethingWentWrong.Error(),
@@ -40,6 +41,7 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 	}
 
 	err = easyjson.Unmarshal(body, &metric)
+	fmt.Println("Error before unmarshalling all", err)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, errorResponse{
 			Message: error2.ErrInvalidValue.Error(),
@@ -48,6 +50,7 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 	}
 
 	if metric.MType != entity.Gauge && metric.MType != entity.Counter {
+		fmt.Printf("Error before checking type:")
 		ctx.JSON(http.StatusBadRequest, errorResponse{
 			Message: error2.ErrInvalidType.Error(),
 		})
