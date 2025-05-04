@@ -60,9 +60,9 @@ func Main(cf *config.Config) {
 	httpServer := httpserver.New(httpserver.WithAddress(cf.Server.Address))
 
 	if cf.Database.DSN != "" {
-		http.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l)
+		http.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf)
 	} else {
-		http.DefineMetricRoutes(httpServer.App, metricHl, l)
+		http.DefineMetricRoutes(httpServer.App, metricHl, l, cf)
 	}
 
 	if cf.App.Restore {

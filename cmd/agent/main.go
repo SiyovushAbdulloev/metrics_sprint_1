@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	pkg_hash "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/hash"
+	"github.com/klauspost/cpuid/v2"
+	"github.com/shirou/gopsutil/v3/mem"
 	"log"
 	"math/rand"
 	"net/http"
@@ -30,11 +33,15 @@ type Config struct {
 	ReportInterval int
 	PollInterval   int
 	ConnAttempts   int
+	HashKey        string
+	RateLimit      int
 }
 
 func collectMetrics(m *Metrics) {
 	var rtm runtime.MemStats
 	runtime.ReadMemStats(&rtm)
+	v, _ := mem.VirtualMemory()
+	cpu := cpuid.CPU
 
 	var counter int64 = 1
 
@@ -70,6 +77,9 @@ func collectMetrics(m *Metrics) {
 	gcSys := float64(rtm.GCSys)
 	heapIdle := float64(rtm.HeapIdle)
 	randomValue := rand.Float64()
+	total := float64(v.Total)
+	free := float64(v.Free)
+	cpuCount := float64(cpu.LogicalCPU())
 
 	data := []Metric{
 		{
@@ -213,6 +223,21 @@ func collectMetrics(m *Metrics) {
 			Value: &randomValue,
 		},
 		{
+			ID:    "Total",
+			MType: "gauge",
+			Value: &total,
+		},
+		{
+			ID:    "Free",
+			MType: "gauge",
+			Value: &free,
+		},
+		{
+			ID:    "Total",
+			MType: "CPU_COUNT",
+			Value: &cpuCount,
+		},
+		{
 			ID:    "PollCount",
 			MType: "counter",
 			Delta: &counter,
@@ -230,10 +255,23 @@ func sendMetrics(client http.Client, ms []Metric, cfg Config) {
 			log.Printf("Error marshaling metric: %v", err)
 			return
 		}
+
 		body := bytes.NewBuffer(data)
+		req, err := http.NewRequest("POST", fmt.Sprintf("http://%s/update/", cfg.Address), body)
+		if err != nil {
+			log.Printf("Error creating request: %v", err)
+			return
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+
+		if cfg.HashKey != "" {
+			hash := pkg_hash.CalculateHashSHA256(body.Bytes(), cfg.HashKey)
+			req.Header.Set("HashSHA256", hash)
+		}
 
 		for i := 0; i <= cfg.ConnAttempts; i++ {
-			res, err2 := client.Post(fmt.Sprintf("http://%s/update/", cfg.Address), "application/json", body)
+			res, err2 := client.Do(req)
 			err = err2
 			if err2 == nil {
 				res.Body.Close()
@@ -259,12 +297,19 @@ func getVars() Config {
 	var address string
 	var reportInterval int
 	var pollInterval int
+	var hashKey string
+	var rateLimit int
+
 	addr := os.Getenv("ADDRESS")
 	reportInt := os.Getenv("REPORT_INTERVAL")
 	pollInt := os.Getenv("POLL_INTERVAL")
+	hashKeyStr := os.Getenv("KEY")
 	addrFlag := flag.String("a", "localhost:8080", "The address to send HTTP requests.")
 	reportIntFlag := flag.Int("r", 10, "The interval in seconds between metric reporting. (in seconds)")
 	pollIntFlag := flag.Int("p", 2, "The interval in seconds between metric polling. (in seconds)")
+	hashKeyFlag := flag.String("k", "", "The hash key")
+	rateLimitStr := os.Getenv("RATE_LIMIT")
+	rateLimitFlag := flag.Int("l", 5, "Max concurrent outgoing requests")
 	flag.Parse()
 
 	if addr == "" {
@@ -293,16 +338,45 @@ func getVars() Config {
 		pollInterval = value
 	}
 
+	if hashKeyStr == "" {
+		hashKey = *hashKeyFlag
+	} else {
+		hashKey = hashKeyStr
+	}
+
+	if rateLimitStr == "" {
+		rateLimit = *rateLimitFlag
+	} else {
+		val, err := strconv.Atoi(rateLimitStr)
+		if err != nil {
+			panic(err)
+		}
+		rateLimit = val
+	}
+
 	return Config{
 		Address:        address,
 		ReportInterval: reportInterval,
 		PollInterval:   pollInterval,
 		ConnAttempts:   3,
+		HashKey:        hashKey,
+		RateLimit:      rateLimit,
+	}
+}
+
+type Job struct {
+	Metric Metric
+}
+
+func worker(id int, jobs <-chan Job, client http.Client, cfg Config) {
+	for job := range jobs {
+		sendMetrics(client, []Metric{job.Metric}, cfg)
 	}
 }
 
 func main() {
 	config := getVars()
+	fmt.Println(config)
 	client := http.Client{}
 	m := Metrics{}
 	collectTicker := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
@@ -310,15 +384,24 @@ func main() {
 	defer collectTicker.Stop()
 	defer sendTicker.Stop()
 
+	jobs := make(chan Job, 100)
+
+	for i := 0; i < config.RateLimit; i++ {
+		go worker(i, jobs, client, config)
+	}
+
 	go func() {
 		for {
 			select {
 			case <-collectTicker.C:
 				collectMetrics(&m)
 			case <-sendTicker.C:
-				go func(metrics []Metric) {
-					sendMetrics(client, metrics, config)
-				}(append([]Metric(nil), m.data...))
+				//go func(metrics []Metric) {
+				//	sendMetrics(client, metrics, config)
+				//}(append([]Metric(nil), m.data...))
+				for _, metric := range m.data {
+					jobs <- Job{Metric: metric}
+				}
 			}
 		}
 	}()
