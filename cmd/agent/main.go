@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	pkg_hash "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/hash"
 	"log"
 	"math/rand"
 	"net/http"
@@ -22,7 +23,8 @@ type Metric struct {
 }
 
 type Metrics struct {
-	data []Metric
+	data        []Metric
+	pollCounter int64
 }
 
 type Config struct {
@@ -30,17 +32,14 @@ type Config struct {
 	ReportInterval int
 	PollInterval   int
 	ConnAttempts   int
+	HashKey        string
 }
 
 func collectMetrics(m *Metrics) {
 	var rtm runtime.MemStats
 	runtime.ReadMemStats(&rtm)
 
-	var counter int64 = 1
-
-	if length := len(m.data); length > 0 {
-		counter = *(m.data[len(m.data)-1].Delta) + 1
-	}
+	m.pollCounter++
 
 	alloc := float64(rtm.Alloc)
 	buckHashSys := float64(rtm.BuckHashSys)
@@ -215,7 +214,7 @@ func collectMetrics(m *Metrics) {
 		{
 			ID:    "PollCount",
 			MType: "counter",
-			Delta: &counter,
+			Delta: &m.pollCounter,
 		},
 	}
 
@@ -230,10 +229,23 @@ func sendMetrics(client http.Client, ms []Metric, cfg Config) {
 			log.Printf("Error marshaling metric: %v", err)
 			return
 		}
+
 		body := bytes.NewBuffer(data)
+		req, err := http.NewRequest("POST", fmt.Sprintf("http://%s/update/", cfg.Address), body)
+		if err != nil {
+			log.Printf("Error creating request: %v", err)
+			return
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+
+		if cfg.HashKey != "" {
+			hash := pkg_hash.CalculateHashSHA256(body.Bytes(), cfg.HashKey)
+			req.Header.Set("HashSHA256", hash)
+		}
 
 		for i := 0; i <= cfg.ConnAttempts; i++ {
-			res, err2 := client.Post(fmt.Sprintf("http://%s/update/", cfg.Address), "application/json", body)
+			res, err2 := client.Do(req)
 			err = err2
 			if err2 == nil {
 				res.Body.Close()
@@ -259,12 +271,15 @@ func getVars() Config {
 	var address string
 	var reportInterval int
 	var pollInterval int
+	var hashKey string
 	addr := os.Getenv("ADDRESS")
 	reportInt := os.Getenv("REPORT_INTERVAL")
 	pollInt := os.Getenv("POLL_INTERVAL")
+	hashKeyStr := os.Getenv("KEY")
 	addrFlag := flag.String("a", "localhost:8080", "The address to send HTTP requests.")
 	reportIntFlag := flag.Int("r", 10, "The interval in seconds between metric reporting. (in seconds)")
 	pollIntFlag := flag.Int("p", 2, "The interval in seconds between metric polling. (in seconds)")
+	hashKeyFlag := flag.String("k", "", "The hash key")
 	flag.Parse()
 
 	if addr == "" {
@@ -293,11 +308,18 @@ func getVars() Config {
 		pollInterval = value
 	}
 
+	if hashKeyStr == "" {
+		hashKey = *hashKeyFlag
+	} else {
+		hashKey = hashKeyStr
+	}
+
 	return Config{
 		Address:        address,
 		ReportInterval: reportInterval,
 		PollInterval:   pollInterval,
 		ConnAttempts:   3,
+		HashKey:        hashKey,
 	}
 }
 
