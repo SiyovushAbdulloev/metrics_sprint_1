@@ -2,6 +2,9 @@ package metric
 
 import "strconv"
 
+// validValue проверяет корректность и парсит значение метрики в зависимости от типа.
+// Поддерживаются типы "gauge" и "counter".
+// Возвращает приведённое значение и булево значение, указывающее на успешность разбора.
 func (h *Handler) validValue(metricType string, value string) (any, bool) {
 	switch metricType {
 	case "gauge":

@@ -1,3 +1,4 @@
+// Package middleware предоставляет middleware-функции для HTTP-сервера, включая логгирование, хэширование и сжатие.
 package middleware
 
 import (
@@ -19,20 +20,25 @@ type gzipWriter struct {
 	Writer *gzip.Writer
 }
 
+// Write записывает сжатые данные в поток ответа.
 func (w gzipWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
+// WriteHeader отправляет HTTP-заголовок с указанным кодом состояния.
 func (w gzipWriter) WriteHeader(code int) {
 	//w.Header().Del("Content-Length") // Prevent incorrect Content-Length issues
 	w.ResponseWriter.WriteHeader(code)
 }
 
+// Flush завершает запись буфера и передаёт данные клиенту.
 func (w gzipWriter) Flush() {
 	w.Writer.Flush()
 	w.ResponseWriter.Flush()
 }
 
+// Compress возвращает middleware-функцию для Gin, которая реализует автоматическое GZIP-сжатие HTTP-ответов и декомпрессию входящих запросов.
+// Работает только с типами, определёнными в allowedExtensions.
 func Compress() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Header.Get("Content-Encoding") == "gzip" {

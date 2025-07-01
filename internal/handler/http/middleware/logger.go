@@ -1,3 +1,4 @@
+// Package middleware предоставляет middleware-функции для HTTP-сервера, включая логгирование, хэширование и сжатие.
 package middleware
 
 import (
@@ -16,17 +17,21 @@ type loggerResponseWriter struct {
 	responseData *responseData
 }
 
+// Write записывает тело ответа и подсчитывает количество байт.
 func (w *loggerResponseWriter) Write(b []byte) (int, error) {
 	size, err := w.ResponseWriter.Write(b)
 	w.responseData.data += size
 	return size, err
 }
 
+// WriteHeader сохраняет статус-код и передаёт его в оригинальный ResponseWriter.
 func (w *loggerResponseWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 	w.responseData.status = statusCode
 }
 
+// Logger возвращает middleware, логирующее метод, URI, статус ответа, размер ответа и время обработки запроса.
+// Использует переданный интерфейс логгера.
 func Logger(l logger.Interface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		responseWriter := &loggerResponseWriter{

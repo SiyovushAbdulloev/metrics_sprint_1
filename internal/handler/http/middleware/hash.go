@@ -1,3 +1,4 @@
+// Package middleware предоставляет middleware-функции для HTTP-сервера, включая логгирование, хэширование и сжатие.
 package middleware
 
 import (
@@ -14,6 +15,7 @@ type responseWriter struct {
 	hashKey string
 }
 
+// Write записывает тело ответа в буфер и, если указан ключ, добавляет SHA256-хэш в заголовок ответа.
 func (rw responseWriter) Write(b []byte) (int, error) {
 	if len(rw.hashKey) > 0 {
 		hash := hash2.CalculateHashSHA256(b, rw.hashKey)
@@ -24,6 +26,9 @@ func (rw responseWriter) Write(b []byte) (int, error) {
 	return rw.ResponseWriter.Write(b)
 }
 
+// Hash возвращает middleware для проверки и установки SHA256-хэша в теле HTTP-запроса/ответа.
+// Проверяет, совпадает ли хэш тела запроса с переданным в заголовке `HashSHA256`.
+// При успешной проверке сохраняет тело для повторного чтения, и устанавливает хэш в ответ.
 func Hash(hashKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if len(hashKey) > 0 {
