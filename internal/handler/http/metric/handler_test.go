@@ -28,8 +28,6 @@ func setupRouterForExtraTests() *gin.Engine {
 }
 
 func TestHandler_GetMetric(t *testing.T) {
-	r := setupRouterForExtraTests()
-
 	// Pre-store metric
 	gaugeValue := 99.9
 	preMetric := entity.Metrics{
@@ -42,7 +40,7 @@ func TestHandler_GetMetric(t *testing.T) {
 	uc := metric.New(repo)
 	h := New(uc, nil)
 
-	r = gin.Default()
+	r := gin.Default()
 	r.POST("/value", h.GetMetric)
 
 	body, _ := json.Marshal(preMetric)
