@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
-	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http"
+	handler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http"
 	metricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/metric"
 	postgresMetricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/postgres_metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/repository/memory"
@@ -14,12 +14,17 @@ import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/httpserver"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/postgres"
+	"github.com/gin-gonic/gin/binding"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"time"
 )
 
 func Main(cf *config.Config) {
+	binding.Validator = nil
 	l, err := logger.New()
 	if err != nil {
 		panic(err)
@@ -60,9 +65,9 @@ func Main(cf *config.Config) {
 	httpServer := httpserver.New(httpserver.WithAddress(cf.Server.Address))
 
 	if cf.Database.DSN != "" {
-		http.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf)
+		handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf)
 	} else {
-		http.DefineMetricRoutes(httpServer.App, metricHl, l, cf)
+		handler.DefineMetricRoutes(httpServer.App, metricHl, l, cf)
 	}
 
 	if cf.App.Restore {
@@ -71,6 +76,10 @@ func Main(cf *config.Config) {
 			panic(err)
 		}
 	}
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	go func() {
 		err = httpServer.Start()
