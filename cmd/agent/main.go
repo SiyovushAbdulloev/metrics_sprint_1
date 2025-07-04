@@ -17,6 +17,10 @@ import (
 	"time"
 )
 
+var buildVersion string = "1.0.0"
+var buildDate string = "2025-07-04"
+var buildCommit string = "HEAD"
+
 type Metric struct {
 	ID    string   `json:"id"`
 	MType string   `json:"type"`
@@ -375,6 +379,10 @@ func worker(id int, jobs <-chan Job, client http.Client, cfg Config) {
 }
 
 func main() {
+	fmt.Printf("Build version: %s (или \"N/A\" при отсутствии значения) \n", buildVersion)
+	fmt.Printf("Build date: %s (или \"N/A\" при отсутствии значения) \n", buildDate)
+	fmt.Printf("Build commit: %s (или \"N/A\" при отсутствии значения) \n", buildCommit)
+
 	config := getVars()
 	fmt.Println(config)
 	client := http.Client{}

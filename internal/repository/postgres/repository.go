@@ -108,8 +108,8 @@ func (repo MetricRepository) GetMetrics() ([]entity.Metrics, error) {
 	var metrics []entity.Metrics
 	for rows.Next() {
 		var m entity.Metrics
-		if err := rows.Scan(&m.ID, &m.MType, &m.Delta, &m.Value); err != nil {
-			return nil, err
+		if err2 := rows.Scan(&m.ID, &m.MType, &m.Delta, &m.Value); err2 != nil {
+			return nil, err2
 		}
 		metrics = append(metrics, m)
 	}
@@ -153,12 +153,12 @@ func (repo MetricRepository) UpdateAll(metrics []entity.Metrics) error {
 		var value interface{}
 
 		if metric.Delta != nil {
-			oldMetric, err := repo.GetMetric(metric)
+			oldMetric, err2 := repo.GetMetric(metric)
 
-			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-				return err
+			if err2 != nil && !errors.Is(err2, pgx.ErrNoRows) {
+				return err2
 			}
-			if errors.Is(err, pgx.ErrNoRows) {
+			if errors.Is(err2, pgx.ErrNoRows) {
 				delta = *metric.Delta
 			} else {
 				delta = *oldMetric.Delta + *metric.Delta

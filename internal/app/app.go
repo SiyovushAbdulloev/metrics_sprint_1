@@ -37,21 +37,21 @@ func Main(cf *config.Config) {
 		panic(err)
 	}
 	if cf.Database.DSN != "" {
-		dbMigration, err := sql.Open("postgres", cf.Database.DSN)
-		if err != nil {
-			l.Info("failed to open postgres db:", "err", err)
-			panic(err)
+		dbMigration, err2 := sql.Open("postgres", cf.Database.DSN)
+		if err2 != nil {
+			l.Info("failed to open postgres db:", "err", err2)
+			panic(err2)
 		}
 		defer dbMigration.Close()
 
-		if err = goose.SetDialect("postgres"); err != nil {
+		if err2 = goose.SetDialect("postgres"); err2 != nil {
 			l.Info("failed to set goose dialect:", "err", err)
-			panic(err)
+			panic(err2)
 		}
 
-		if err = goose.Up(dbMigration, "./migrations"); err != nil {
-			l.Info("failed to migrate goose migrations:", "err", err)
-			panic(err)
+		if err2 = goose.Up(dbMigration, "./migrations"); err2 != nil {
+			l.Info("failed to migrate goose migrations:", "err", err2)
+			panic(err2)
 		}
 	}
 
