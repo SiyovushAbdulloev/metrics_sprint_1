@@ -1,3 +1,4 @@
+// Package postgres содержит реализацию репозитория метрик на основе PostgreSQL.
 package postgres
 
 import (
@@ -10,16 +11,19 @@ import (
 	"log"
 )
 
+// MetricRepository предоставляет доступ к хранилищу метрик в PostgreSQL.
 type MetricRepository struct {
 	DB *postgres.Postgres
 }
 
+// NewMetricRepository создаёт новый экземпляр MetricRepository.
 func NewMetricRepository(db *postgres.Postgres) MetricRepository {
 	return MetricRepository{
 		DB: db,
 	}
 }
 
+// StoreMetric сохраняет или обновляет одну метрику в базе данных.
 func (repo MetricRepository) StoreMetric(metric entity.Metrics) (entity.Metrics, error) {
 	query := repo.DB.Builder.Insert("metrics").
 		Columns("id", "type", "delta", "value").
@@ -39,6 +43,8 @@ func (repo MetricRepository) StoreMetric(metric entity.Metrics) (entity.Metrics,
 	return metric, nil
 }
 
+// StoreAll сохраняет список метрик в базу данных.
+// Используется для пакетной вставки.
 func (repo MetricRepository) StoreAll(metrics []entity.Metrics) error {
 	query := repo.DB.Builder.Insert("metrics").
 		Columns("id", "type", "delta", "value")
@@ -60,6 +66,7 @@ func (repo MetricRepository) StoreAll(metrics []entity.Metrics) error {
 	return nil
 }
 
+// GetMetric возвращает одну метрику по ID и типу из базы данных.
 func (repo MetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics, error) {
 	query := repo.DB.Builder.
 		Select("id, type, delta, value").
@@ -80,6 +87,7 @@ func (repo MetricRepository) GetMetric(metric entity.Metrics) (entity.Metrics, e
 	return m, nil
 }
 
+// GetMetrics возвращает все метрики из базы данных.
 func (repo MetricRepository) GetMetrics() ([]entity.Metrics, error) {
 	query := repo.DB.Builder.
 		Select("id, type, delta, value").
@@ -113,10 +121,13 @@ func (repo MetricRepository) GetMetrics() ([]entity.Metrics, error) {
 	return metrics, nil
 }
 
+// Check выполняет проверку соединения с базой данных.
 func (repo MetricRepository) Check() error {
 	return repo.DB.Pool.Ping(context.Background())
 }
 
+// UpdateAll обновляет значения существующих метрик или вставляет новые,
+// используя транзакцию и UPSERT-логику.
 func (repo MetricRepository) UpdateAll(metrics []entity.Metrics) error {
 	ctx := context.Background()
 

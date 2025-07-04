@@ -1,3 +1,4 @@
+// Package metric предоставляет HTTP-обработчики для работы с метриками.
 package metric
 
 import (
@@ -14,11 +15,13 @@ import (
 	"strconv"
 )
 
+// Handler обрабатывает HTTP-запросы, связанные с метриками.
 type Handler struct {
 	uc usecase.MetricUseCase
 	l  logger.Interface
 }
 
+// New создает новый экземпляр Handler.
 func New(uc usecase.MetricUseCase, l logger.Interface) *Handler {
 	return &Handler{
 		uc: uc,
@@ -26,6 +29,7 @@ func New(uc usecase.MetricUseCase, l logger.Interface) *Handler {
 	}
 }
 
+// Check обрабатывает GET-запрос к /ping и проверяет доступность хранилища.
 func (h *Handler) Check(ctx *gin.Context) {
 	err := h.uc.Check()
 
@@ -37,6 +41,7 @@ func (h *Handler) Check(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{})
 }
 
+// StoreMetric обрабатывает POST-запрос и сохраняет одну метрику из JSON.
 func (h *Handler) StoreMetric(ctx *gin.Context) {
 	var metric entity.Metrics
 
@@ -79,6 +84,7 @@ func (h *Handler) StoreMetric(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, metric)
 }
 
+// UpdateManyMetric обрабатывает POST-запрос и сохраняет список метрик из JSON.
 func (h *Handler) UpdateManyMetric(ctx *gin.Context) {
 	var metricsList entity.MetricsList
 
@@ -152,6 +158,7 @@ func (h *Handler) UpdateManyMetric(ctx *gin.Context) {
 	})
 }
 
+// OldStoreMetric обрабатывает POST-запрос с параметрами в URL и сохраняет одну метрику.
 func (h *Handler) OldStoreMetric(ctx *gin.Context) {
 	metricType := ctx.Param("type")
 	metricName := ctx.Param("name")
@@ -195,6 +202,7 @@ func (h *Handler) OldStoreMetric(ctx *gin.Context) {
 	ctx.String(http.StatusOK, "OK")
 }
 
+// GetMetric обрабатывает POST-запрос и возвращает значение метрики по ID и типу.
 func (h *Handler) GetMetric(ctx *gin.Context) {
 	var metric entity.Metrics
 
@@ -236,6 +244,7 @@ func (h *Handler) GetMetric(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, m)
 }
 
+// OldGetMetric обрабатывает GET-запрос с параметрами в URL и возвращает значение метрики.
 func (h *Handler) OldGetMetric(ctx *gin.Context) {
 	metricType := ctx.Param("type")
 	metricName := ctx.Param("name")
@@ -265,6 +274,7 @@ func (h *Handler) OldGetMetric(ctx *gin.Context) {
 	ctx.String(http.StatusOK, fmt.Sprintf("%v", value))
 }
 
+// GetMetrics обрабатывает GET-запрос и возвращает HTML-страницу со всеми метриками.
 func (h *Handler) GetMetrics(ctx *gin.Context) {
 	metrics, err := h.uc.GetMetrics()
 	if err != nil {

@@ -3,9 +3,11 @@ module github.com/SiyovushAbdulloev/metriks_sprint_1
 go 1.22.12
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/squirrel v1.5.4
 	github.com/gin-gonic/gin v1.10.0
 	github.com/jackc/pgx/v5 v5.6.0
+	github.com/klauspost/cpuid/v2 v2.2.7
 	github.com/lib/pq v1.10.9
 	github.com/mailru/easyjson v0.9.0
 	github.com/pressly/goose/v3 v3.22.0
@@ -32,7 +34,6 @@ require (
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
