@@ -39,7 +39,6 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	db.Close()
-	os.Exit(code)
 }
 
 func cleanupMetricsTable(t *testing.T) {
