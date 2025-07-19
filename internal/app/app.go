@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
 	handler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http"
@@ -11,6 +12,7 @@ import (
 	postgresRepo "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/repository/postgres"
 	metricUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/metric"
 	postgresMetricUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/postgres_metric"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/crypto"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/httpserver"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/postgres"
@@ -65,7 +67,13 @@ func Main(cf *config.Config) {
 	httpServer := httpserver.New(httpserver.WithAddress(cf.Server.Address))
 
 	if cf.Database.DSN != "" {
-		handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf)
+		key, err := crypto.LoadPrivateKey(cf.App.CryptoKeyPath)
+		fmt.Println("PRIVATE", key)
+		if err == nil {
+			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, key)
+		} else {
+			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, nil)
+		}
 	} else {
 		handler.DefineMetricRoutes(httpServer.App, metricHl, l, cf)
 	}

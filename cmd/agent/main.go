@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/crypto"
 	pkg_hash "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/hash"
 	"github.com/klauspost/cpuid/v2"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -14,12 +16,18 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 )
 
-var buildVersion string = "1.0.0"
-var buildDate string = "2025-07-04"
-var buildCommit string = "HEAD"
+var (
+	pubKey       *rsa.PublicKey
+	pubKeyOnce   sync.Once
+	pubKeyErr    error
+	buildVersion string = "1.0.0"
+	buildDate    string = "2025-07-04"
+	buildCommit  string = "HEAD"
+)
 
 type Metric struct {
 	ID    string   `json:"id"`
@@ -39,6 +47,7 @@ type Config struct {
 	ConnAttempts   int
 	HashKey        string
 	RateLimit      int
+	CryptoKeyPath  string
 }
 
 func collectMetrics(m *Metrics) {
@@ -252,6 +261,17 @@ func collectMetrics(m *Metrics) {
 }
 
 func sendMetrics(client http.Client, ms []Metric, cfg Config) {
+	pubKeyOnce.Do(func() {
+		if cfg.CryptoKeyPath != "" {
+			pubKey, pubKeyErr = crypto.LoadPublicKey(cfg.CryptoKeyPath)
+		}
+	})
+
+	if pubKeyErr != nil {
+		log.Printf("Public key error: %v", pubKeyErr)
+		return
+	}
+
 	for _, metric := range ms {
 		var err error
 		data, err := json.Marshal(metric)
@@ -260,14 +280,22 @@ func sendMetrics(client http.Client, ms []Metric, cfg Config) {
 			return
 		}
 
+		if pubKey != nil {
+			encrypted, err := crypto.EncryptWithPublicKey(data, pubKey)
+			if err != nil {
+				log.Printf("Error encrypting: %v", err)
+				continue
+			}
+			data = encrypted
+		}
+
 		body := bytes.NewBuffer(data)
 		req, err := http.NewRequest("POST", fmt.Sprintf("http://%s/update/", cfg.Address), body)
 		if err != nil {
 			log.Printf("Error creating request: %v", err)
-			return
+			continue
 		}
-
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", "application/octet-stream")
 
 		if cfg.HashKey != "" {
 			hash := pkg_hash.CalculateHashSHA256(body.Bytes(), cfg.HashKey)
@@ -303,6 +331,7 @@ func getVars() Config {
 	var pollInterval int
 	var hashKey string
 	var rateLimit int
+	var cryptoKeyPath string
 
 	addr := os.Getenv("ADDRESS")
 	reportInt := os.Getenv("REPORT_INTERVAL")
@@ -314,6 +343,8 @@ func getVars() Config {
 	hashKeyFlag := flag.String("k", "", "The hash key")
 	rateLimitStr := os.Getenv("RATE_LIMIT")
 	rateLimitFlag := flag.Int("l", 5, "Max concurrent outgoing requests")
+	cryptoKeyEnv := os.Getenv("CRYPTO_KEY")
+	cryptoKeyFlag := flag.String("crypto-key", "./public.pem", "Path to public key (PEM) for RSA encryption")
 	flag.Parse()
 
 	if addr == "" {
@@ -358,6 +389,12 @@ func getVars() Config {
 		rateLimit = val
 	}
 
+	if cryptoKeyEnv != "" {
+		cryptoKeyPath = cryptoKeyEnv
+	} else {
+		cryptoKeyPath = *cryptoKeyFlag
+	}
+
 	return Config{
 		Address:        address,
 		ReportInterval: reportInterval,
@@ -365,6 +402,7 @@ func getVars() Config {
 		ConnAttempts:   3,
 		HashKey:        hashKey,
 		RateLimit:      rateLimit,
+		CryptoKeyPath:  cryptoKeyPath,
 	}
 }
 

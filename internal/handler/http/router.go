@@ -1,6 +1,8 @@
 package http
 
 import (
+	"crypto/rsa"
+	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	metricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/middleware"
@@ -29,7 +31,13 @@ func DefineMetricRoutes(app *gin.Engine, metricHl *metricHandler.Handler, l logg
 	app.POST("/update/", metricHl.StoreMetric)
 }
 
-func DefinePostgresMetricRoutes(app *gin.Engine, checkHl *checkHandler.Handler, l logger.Interface, cfg *config.Config) {
+func DefinePostgresMetricRoutes(
+	app *gin.Engine,
+	checkHl *checkHandler.Handler,
+	l logger.Interface,
+	cfg *config.Config,
+	privKey *rsa.PrivateKey,
+) {
 	_, b, _, _ := runtime.Caller(0)
 	basePath := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(b))))
 	templatesPath := filepath.Join(basePath, "templates", "*.html")
@@ -39,6 +47,10 @@ func DefinePostgresMetricRoutes(app *gin.Engine, checkHl *checkHandler.Handler, 
 	app.Use(middleware.Logger(l))
 	app.Use(middleware.Compress())
 	app.Use(middleware.Hash(cfg.App.HashKey))
+	fmt.Println("Key", privKey)
+	if privKey != nil {
+		app.Use(middleware.DecryptBody(privKey))
+	}
 
 	app.GET("/", checkHl.GetMetrics)
 	app.GET("/value/:type/:name", checkHl.OldGetMetric)

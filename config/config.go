@@ -22,6 +22,7 @@ type App struct {
 	Filepath      string
 	Restore       bool
 	HashKey       string
+	CryptoKeyPath string
 }
 
 type Server struct {
@@ -40,6 +41,7 @@ func New() (*Config, error) {
 	var filePath string
 	var dsn string
 	var hashKey string
+	var cryptoKeyPath string
 
 	addr := os.Getenv("ADDRESS")
 	addrFlag := flag.String("a", "localhost:8080", "The address to listen on for HTTP requests.")
@@ -63,6 +65,9 @@ func New() (*Config, error) {
 	hk := os.Getenv("KEY")
 	//postgres://postgres:postgres@localhost:5432/metrics
 	hkFlag := flag.String("k", "", "The hash key.")
+
+	ck := os.Getenv("CRYPTO_KEY")
+	ckFlag := flag.String("crypto-key", "./private.pem", "Path to RSA private key file")
 
 	flag.Parse()
 
@@ -112,6 +117,12 @@ func New() (*Config, error) {
 		hashKey = hk
 	}
 
+	if ck == "" {
+		cryptoKeyPath = *ckFlag
+	} else {
+		cryptoKeyPath = ck
+	}
+
 	return &Config{
 		Server: Server{
 			Address: address,
@@ -124,6 +135,7 @@ func New() (*Config, error) {
 			Filepath:      filePath,
 			Restore:       restore,
 			HashKey:       hashKey,
+			CryptoKeyPath: cryptoKeyPath,
 		},
 		Database: Database{
 			DSN: dsn,
