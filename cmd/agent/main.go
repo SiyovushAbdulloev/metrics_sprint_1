@@ -16,6 +16,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -48,6 +49,47 @@ type Config struct {
 	HashKey        string
 	RateLimit      int
 	CryptoKeyPath  string
+}
+
+type JSONAgentConfig struct {
+	Address        string `json:"address"`
+	ReportInterval int    `json:"report_interval"`
+	PollInterval   int    `json:"poll_interval"`
+	CryptoKey      string `json:"crypto_key"`
+}
+
+func readJSONAgentConfig(path string) (*JSONAgentConfig, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg JSONAgentConfig
+	err = json.Unmarshal(data, &cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func extractAgentConfigPath() string {
+	for i, arg := range os.Args {
+		if arg == "-config" || arg == "-c" {
+			if i+1 < len(os.Args) {
+				return os.Args[i+1]
+			}
+		} else if strings.HasPrefix(arg, "-config=") {
+			return strings.TrimPrefix(arg, "-config=")
+		} else if strings.HasPrefix(arg, "-c=") {
+			return strings.TrimPrefix(arg, "-c=")
+		}
+	}
+	if envCfg := os.Getenv("CONFIG"); envCfg != "" {
+		return envCfg
+	}
+	return ""
 }
 
 func collectMetrics(m *Metrics) {
@@ -326,6 +368,19 @@ func sendMetrics(client http.Client, ms []Metric, cfg Config) {
 }
 
 func getVars() Config {
+	var configPath string
+	flag.StringVar(&configPath, "config", "", "Path to JSON config file")
+	flag.StringVar(&configPath, "c", "", "Path to JSON config file (short)")
+
+	configPath = extractAgentConfigPath()
+
+	jsonCfg, _ := readJSONAgentConfig(configPath)
+	if jsonCfg == nil {
+		jsonCfg = &JSONAgentConfig{}
+	}
+
+	fmt.Println("JSON:", jsonCfg)
+
 	var address string
 	var reportInterval int
 	var pollInterval int
