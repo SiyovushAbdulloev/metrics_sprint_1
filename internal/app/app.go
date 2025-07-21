@@ -21,6 +21,9 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -65,6 +68,10 @@ func Main(cf *config.Config) {
 
 	httpServer := httpserver.New(httpserver.WithAddress(cf.Server.Address))
 
+	serverErr := make(chan error, 1)
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
 	if cf.Database.DSN != "" {
 		key, err := crypto.LoadPrivateKey(cf.App.CryptoKeyPath)
 		if err == nil {
@@ -88,11 +95,7 @@ func Main(cf *config.Config) {
 	}()
 
 	go func() {
-		err = httpServer.Start()
-
-		if err != nil {
-			panic(err)
-		}
+		serverErr <- httpServer.Start()
 	}()
 
 	storeTicker := time.NewTicker(time.Second * time.Duration(cf.App.StoreInterval))
@@ -104,5 +107,14 @@ func Main(cf *config.Config) {
 		}
 	}()
 
-	select {}
+	select {
+	case <-stopChan:
+		log.Println("Сервер: получен сигнал завершения, останавливаемся...")
+
+		// Сохраняем метрики в файл
+		metricHl.StoreInFile(cf.App.Filepath)
+		log.Println("Метрики сохранены. Завершение.")
+	case err := <-serverErr:
+		log.Fatalf("Ошибка запуска сервера: %v", err)
+	}
 }

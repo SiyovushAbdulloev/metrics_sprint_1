@@ -14,10 +14,12 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -28,6 +30,7 @@ var (
 	buildVersion string = "1.0.0"
 	buildDate    string = "2025-07-04"
 	buildCommit  string = "HEAD"
+	wg           sync.WaitGroup
 )
 
 type Metric struct {
@@ -465,9 +468,10 @@ type Job struct {
 	Metric Metric
 }
 
-func worker(id int, jobs <-chan Job, client http.Client, cfg Config) {
+func worker(id int, jobs <-chan Job, client http.Client, cfg Config, wg *sync.WaitGroup) {
 	for job := range jobs {
 		sendMetrics(client, []Metric{job.Metric}, cfg)
+		wg.Done()
 	}
 }
 
@@ -476,8 +480,9 @@ func main() {
 	fmt.Printf("Build date: %s (или \"N/A\" при отсутствии значения) \n", buildDate)
 	fmt.Printf("Build commit: %s (или \"N/A\" при отсутствии значения) \n", buildCommit)
 
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	config := getVars()
-	fmt.Println(config)
 	client := http.Client{}
 	m := Metrics{}
 	collectTicker := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
@@ -488,8 +493,20 @@ func main() {
 	jobs := make(chan Job, 100)
 
 	for i := 0; i < config.RateLimit; i++ {
-		go worker(i, jobs, client, config)
+		go worker(i, jobs, client, config, &wg)
 	}
+
+	go func() {
+		<-stopChan
+		log.Println("Получен сигнал завершения, завершаем агент...")
+
+		collectTicker.Stop()
+		sendTicker.Stop()
+		close(jobs) // это завершит всех воркеров
+
+		wg.Wait() // дождёмся, пока воркеры отправят всё
+		os.Exit(0)
+	}()
 
 	go func() {
 		for {
@@ -501,6 +518,7 @@ func main() {
 				//	sendMetrics(client, metrics, config)
 				//}(append([]Metric(nil), m.data...))
 				for _, metric := range m.data {
+					wg.Add(1)
 					jobs <- Job{Metric: metric}
 				}
 			}
