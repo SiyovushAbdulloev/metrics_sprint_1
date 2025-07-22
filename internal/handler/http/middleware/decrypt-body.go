@@ -3,7 +3,6 @@ package middleware
 import (
 	"bytes"
 	"crypto/rsa"
-	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/crypto"
 	"github.com/gin-gonic/gin"
 	"io"
@@ -23,7 +22,7 @@ func DecryptBody(privKey *rsa.PrivateKey) gin.HandlerFunc {
 
 		// Расшифровать
 		plaintext, err := crypto.DecryptWithPrivateKey(body, privKey)
-		fmt.Println("Plaintext: ", string(plaintext))
+
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "failed to decrypt request body"})
 			c.Abort()

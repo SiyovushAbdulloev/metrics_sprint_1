@@ -3,9 +3,9 @@ package config
 import (
 	"encoding/json"
 	"flag"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/configparam"
 	"os"
 	"strconv"
-	"strings"
 )
 
 type Config struct {
@@ -60,34 +60,12 @@ func readJSONConfig(path string) (*JSONConfig, error) {
 	return &cfg, nil
 }
 
-func extractConfigPath() string {
-	// Поиск флага -config или -c вручную
-	for i, arg := range os.Args {
-		if arg == "-config" || arg == "-c" {
-			if i+1 < len(os.Args) {
-				return os.Args[i+1]
-			}
-		} else if strings.HasPrefix(arg, "-config=") {
-			return strings.TrimPrefix(arg, "-config=")
-		} else if strings.HasPrefix(arg, "-c=") {
-			return strings.TrimPrefix(arg, "-c=")
-		}
-	}
-
-	// ENV fallback
-	if envCfg := os.Getenv("CONFIG"); envCfg != "" {
-		return envCfg
-	}
-
-	return ""
-}
-
 func New() (*Config, error) {
 	var configPath string
 	flag.StringVar(&configPath, "config", "", "Path to JSON config file")
 	flag.StringVar(&configPath, "c", "", "Path to JSON config file (short)")
 
-	configPath = extractConfigPath()
+	configPath = configparam.ExtractConfig()
 
 	jsonCfg, _ := readJSONConfig(configPath)
 	if jsonCfg == nil {

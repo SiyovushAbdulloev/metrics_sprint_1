@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/configparam"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/crypto"
 	pkg_hash "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/hash"
 	"github.com/klauspost/cpuid/v2"
@@ -17,21 +18,25 @@ import (
 	"os/signal"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 )
 
 var (
-	pubKey       *rsa.PublicKey
-	pubKeyOnce   sync.Once
-	pubKeyErr    error
-	buildVersion string = "1.0.0"
-	buildDate    string = "2025-07-04"
-	buildCommit  string = "HEAD"
-	wg           sync.WaitGroup
+	pubKey     *rsa.PublicKey
+	pubKeyOnce sync.Once
+	pubKeyErr  error
+	wg         sync.WaitGroup
 )
+
+type Build struct {
+	Version string
+	Date    string
+	Commit  string
+}
+
+var buildInfo Build
 
 type Metric struct {
 	ID    string   `json:"id"`
@@ -75,24 +80,6 @@ func readJSONAgentConfig(path string) (*JSONAgentConfig, error) {
 		return nil, err
 	}
 	return &cfg, nil
-}
-
-func extractAgentConfigPath() string {
-	for i, arg := range os.Args {
-		if arg == "-config" || arg == "-c" {
-			if i+1 < len(os.Args) {
-				return os.Args[i+1]
-			}
-		} else if strings.HasPrefix(arg, "-config=") {
-			return strings.TrimPrefix(arg, "-config=")
-		} else if strings.HasPrefix(arg, "-c=") {
-			return strings.TrimPrefix(arg, "-c=")
-		}
-	}
-	if envCfg := os.Getenv("CONFIG"); envCfg != "" {
-		return envCfg
-	}
-	return ""
 }
 
 func collectMetrics(m *Metrics) {
@@ -375,14 +362,12 @@ func getVars() Config {
 	flag.StringVar(&configPath, "config", "", "Path to JSON config file")
 	flag.StringVar(&configPath, "c", "", "Path to JSON config file (short)")
 
-	configPath = extractAgentConfigPath()
+	configPath = configparam.ExtractConfig()
 
 	jsonCfg, _ := readJSONAgentConfig(configPath)
 	if jsonCfg == nil {
 		jsonCfg = &JSONAgentConfig{}
 	}
-
-	fmt.Println("JSON:", jsonCfg)
 
 	var address string
 	var reportInterval int
@@ -475,10 +460,16 @@ func worker(id int, jobs <-chan Job, client http.Client, cfg Config, wg *sync.Wa
 	}
 }
 
+func init() {
+	buildInfo.Version = "1.0.0"
+	buildInfo.Date = "2025-07-04"
+	buildInfo.Commit = "HEAD"
+}
+
 func main() {
-	fmt.Printf("Build version: %s (или \"N/A\" при отсутствии значения) \n", buildVersion)
-	fmt.Printf("Build date: %s (или \"N/A\" при отсутствии значения) \n", buildDate)
-	fmt.Printf("Build commit: %s (или \"N/A\" при отсутствии значения) \n", buildCommit)
+	fmt.Printf("Build version: %s (или \"N/A\" при отсутствии значения) \n", buildInfo.Version)
+	fmt.Printf("Build date: %s (или \"N/A\" при отсутствии значения) \n", buildInfo.Date)
+	fmt.Printf("Build commit: %s (или \"N/A\" при отсутствии значения) \n", buildInfo.Commit)
 
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)

@@ -2,7 +2,6 @@ package http
 
 import (
 	"crypto/rsa"
-	"fmt"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	metricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/middleware"
@@ -47,7 +46,7 @@ func DefinePostgresMetricRoutes(
 	app.Use(middleware.Logger(l))
 	app.Use(middleware.Compress())
 	app.Use(middleware.Hash(cfg.App.HashKey))
-	fmt.Println("Key", privKey)
+
 	if privKey != nil {
 		app.Use(middleware.DecryptBody(privKey))
 	}
