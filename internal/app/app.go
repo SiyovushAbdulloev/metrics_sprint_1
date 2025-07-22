@@ -75,9 +75,9 @@ func Main(cf *config.Config) {
 	if cf.Database.DSN != "" {
 		key, err := crypto.LoadPrivateKey(cf.App.CryptoKeyPath)
 		if err == nil {
-			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, key)
+			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, key, cf.Server.TrustedSubnet)
 		} else {
-			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, nil)
+			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, nil, "")
 		}
 	} else {
 		handler.DefineMetricRoutes(httpServer.App, metricHl, l, cf)

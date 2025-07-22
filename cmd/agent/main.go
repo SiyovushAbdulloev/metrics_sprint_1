@@ -9,6 +9,7 @@ import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/configparam"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/crypto"
 	pkg_hash "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/hash"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/utils/localip"
 	"github.com/klauspost/cpuid/v2"
 	"github.com/shirou/gopsutil/v3/mem"
 	"log"
@@ -328,6 +329,8 @@ func sendMetrics(client http.Client, ms []Metric, cfg Config) {
 			continue
 		}
 		req.Header.Set("Content-Type", "application/octet-stream")
+		realIP := localip.LocalIP()
+		req.Header.Set("X-Real-IP", realIP)
 
 		if cfg.HashKey != "" {
 			hash := pkg_hash.CalculateHashSHA256(body.Bytes(), cfg.HashKey)

@@ -5,6 +5,7 @@ import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	metricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/middleware"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/middleware/whitelist"
 	checkHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/postgres_metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,7 @@ func DefinePostgresMetricRoutes(
 	l logger.Interface,
 	cfg *config.Config,
 	privKey *rsa.PrivateKey,
+	trustedSubnet string,
 ) {
 	_, b, _, _ := runtime.Caller(0)
 	basePath := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(b))))
@@ -43,6 +45,7 @@ func DefinePostgresMetricRoutes(
 
 	app.LoadHTMLGlob(templatesPath)
 
+	app.Use(whitelist.IPWhitelist(trustedSubnet))
 	app.Use(middleware.Logger(l))
 	app.Use(middleware.Compress())
 	app.Use(middleware.Hash(cfg.App.HashKey))

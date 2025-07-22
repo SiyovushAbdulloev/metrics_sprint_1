@@ -28,7 +28,8 @@ type App struct {
 }
 
 type Server struct {
-	Address string
+	Address       string
+	TrustedSubnet string
 }
 
 type Log struct {
@@ -43,6 +44,7 @@ type JSONConfig struct {
 	DatabaseDSN   string `json:"database_dsn"`
 	HashKey       string `json:"hash_key"`
 	CryptoKey     string `json:"crypto_key"`
+	TrustedSubnet string `json:"trusted_subnet"`
 }
 
 func readJSONConfig(path string) (*JSONConfig, error) {
@@ -80,6 +82,7 @@ func New() (*Config, error) {
 	var dsn string
 	var hashKey string
 	var cryptoKeyPath string
+	var trustedSubnet string
 
 	addr := os.Getenv("ADDRESS")
 	addrFlag := flag.String("a", getString(jsonCfg.Address, "localhost:8080"), "The address to listen on for HTTP requests.")
@@ -106,6 +109,9 @@ func New() (*Config, error) {
 
 	ck := os.Getenv("CRYPTO_KEY")
 	ckFlag := flag.String("crypto-key", getString(jsonCfg.CryptoKey, "./private.pem"), "Path to RSA private key file")
+
+	trSubnet := os.Getenv("TRUSTED_SUBNET")
+	trSubnetFlag := flag.String("t", getString(jsonCfg.TrustedSubnet, ""), "List of subnets, which are allowed to make request")
 
 	flag.Parse()
 
@@ -161,9 +167,16 @@ func New() (*Config, error) {
 		cryptoKeyPath = ck
 	}
 
+	if trSubnet == "" {
+		trustedSubnet = *trSubnetFlag
+	} else {
+		trustedSubnet = trSubnet
+	}
+
 	return &Config{
 		Server: Server{
-			Address: address,
+			Address:       address,
+			TrustedSubnet: trustedSubnet,
 		},
 		Log: Log{
 			Level: logLevel,
