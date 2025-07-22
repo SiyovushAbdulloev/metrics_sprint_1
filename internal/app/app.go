@@ -11,6 +11,7 @@ import (
 	postgresRepo "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/repository/postgres"
 	metricUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/metric"
 	postgresMetricUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/postgres_metric"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/crypto"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/httpserver"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/postgres"
@@ -20,6 +21,9 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -64,8 +68,17 @@ func Main(cf *config.Config) {
 
 	httpServer := httpserver.New(httpserver.WithAddress(cf.Server.Address))
 
+	serverErr := make(chan error, 1)
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
 	if cf.Database.DSN != "" {
-		handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf)
+		key, err := crypto.LoadPrivateKey(cf.App.CryptoKeyPath)
+		if err == nil {
+			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, key)
+		} else {
+			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, nil)
+		}
 	} else {
 		handler.DefineMetricRoutes(httpServer.App, metricHl, l, cf)
 	}
@@ -82,11 +95,7 @@ func Main(cf *config.Config) {
 	}()
 
 	go func() {
-		err = httpServer.Start()
-
-		if err != nil {
-			panic(err)
-		}
+		serverErr <- httpServer.Start()
 	}()
 
 	storeTicker := time.NewTicker(time.Second * time.Duration(cf.App.StoreInterval))
@@ -98,5 +107,14 @@ func Main(cf *config.Config) {
 		}
 	}()
 
-	select {}
+	select {
+	case <-stopChan:
+		log.Println("Сервер: получен сигнал завершения, останавливаемся...")
+
+		// Сохраняем метрики в файл
+		metricHl.StoreInFile(cf.App.Filepath)
+		log.Println("Метрики сохранены. Завершение.")
+	case err := <-serverErr:
+		log.Fatalf("Ошибка запуска сервера: %v", err)
+	}
 }
