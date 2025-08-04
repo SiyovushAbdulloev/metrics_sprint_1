@@ -1,9 +1,11 @@
 package http
 
 import (
+	"crypto/rsa"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	metricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/middleware"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/middleware/whitelist"
 	checkHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/postgres_metric"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -29,16 +31,28 @@ func DefineMetricRoutes(app *gin.Engine, metricHl *metricHandler.Handler, l logg
 	app.POST("/update/", metricHl.StoreMetric)
 }
 
-func DefinePostgresMetricRoutes(app *gin.Engine, checkHl *checkHandler.Handler, l logger.Interface, cfg *config.Config) {
+func DefinePostgresMetricRoutes(
+	app *gin.Engine,
+	checkHl *checkHandler.Handler,
+	l logger.Interface,
+	cfg *config.Config,
+	privKey *rsa.PrivateKey,
+	trustedSubnet string,
+) {
 	_, b, _, _ := runtime.Caller(0)
 	basePath := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(b))))
 	templatesPath := filepath.Join(basePath, "templates", "*.html")
 
 	app.LoadHTMLGlob(templatesPath)
 
+	app.Use(whitelist.IPWhitelist(trustedSubnet))
 	app.Use(middleware.Logger(l))
 	app.Use(middleware.Compress())
 	app.Use(middleware.Hash(cfg.App.HashKey))
+
+	if privKey != nil {
+		app.Use(middleware.DecryptBody(privKey))
+	}
 
 	app.GET("/", checkHl.GetMetrics)
 	app.GET("/value/:type/:name", checkHl.OldGetMetric)

@@ -1,0 +1,10 @@
+{
+  "address": "localhost:8080",
+  "restore": false,
+  "store_interval": 400,
+  "store_file": "/storage.txt",
+  "database_dsn": "postgres://postgres:password@localhost:5432/metrics",
+  "crypto_key": "./private.pem",
+  "trusted_subnet": "",
+  "grpc_address": "localhost:10000"
+}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
+	grpc2 "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/grpc"
 	handler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http"
 	metricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/metric"
 	postgresMetricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/postgres_metric"
@@ -11,15 +12,22 @@ import (
 	postgresRepo "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/repository/postgres"
 	metricUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/metric"
 	postgresMetricUseCase "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/usecase/postgres_metric"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/crypto"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/httpserver"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/postgres"
+	pb "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/proto"
 	"github.com/gin-gonic/gin/binding"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
+	"google.golang.org/grpc"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -64,8 +72,17 @@ func Main(cf *config.Config) {
 
 	httpServer := httpserver.New(httpserver.WithAddress(cf.Server.Address))
 
+	serverErr := make(chan error, 1)
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
 	if cf.Database.DSN != "" {
-		handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf)
+		key, err := crypto.LoadPrivateKey(cf.App.CryptoKeyPath)
+		if err == nil {
+			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, key, cf.Server.TrustedSubnet)
+		} else {
+			handler.DefinePostgresMetricRoutes(httpServer.App, postgresHl, l, cf, nil, "")
+		}
 	} else {
 		handler.DefineMetricRoutes(httpServer.App, metricHl, l, cf)
 	}
@@ -77,16 +94,30 @@ func Main(cf *config.Config) {
 		}
 	}
 
+	var grpcSrv *grpc.Server
+	if cf.Server.GRPCAddress != "" {
+		go func() {
+			lis, err := net.Listen("tcp", cf.Server.GRPCAddress)
+			if err != nil {
+				log.Fatalf("Ошибка запуска gRPC listener: %v", err)
+			}
+
+			grpcSrv = grpc.NewServer()
+			pb.RegisterMetricsServiceServer(grpcSrv, grpc2.NewGRPCServer(postgresUC, nil)) // или metricUC
+
+			log.Printf("gRPC сервер запущен на %s", cf.Server.GRPCAddress)
+			if err := grpcSrv.Serve(lis); err != nil {
+				log.Fatalf("Ошибка gRPC сервера: %v", err)
+			}
+		}()
+	}
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
 	go func() {
-		err = httpServer.Start()
-
-		if err != nil {
-			panic(err)
-		}
+		serverErr <- httpServer.Start()
 	}()
 
 	storeTicker := time.NewTicker(time.Second * time.Duration(cf.App.StoreInterval))
@@ -98,5 +129,17 @@ func Main(cf *config.Config) {
 		}
 	}()
 
-	select {}
+	select {
+	case <-stopChan:
+		log.Println("Сервер: получен сигнал завершения, останавливаемся...")
+
+		// Сохраняем метрики в файл
+		metricHl.StoreInFile(cf.App.Filepath)
+		if grpcSrv != nil {
+			grpcSrv.GracefulStop()
+		}
+		log.Println("Метрики сохранены. Завершение.")
+	case err := <-serverErr:
+		log.Fatalf("Ошибка запуска сервера: %v", err)
+	}
 }

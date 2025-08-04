@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/configparam"
 	"os"
 	"strconv"
 )
@@ -22,17 +24,58 @@ type App struct {
 	Filepath      string
 	Restore       bool
 	HashKey       string
+	CryptoKeyPath string
 }
 
 type Server struct {
-	Address string
+	Address       string
+	TrustedSubnet string
+	GRPCAddress   string
 }
 
 type Log struct {
 	Level string
 }
 
+type JSONConfig struct {
+	Address       string `json:"address"`
+	Restore       *bool  `json:"restore"`
+	StoreInterval int    `json:"store_interval"`
+	Filepath      string `json:"store_file"`
+	DatabaseDSN   string `json:"database_dsn"`
+	HashKey       string `json:"hash_key"`
+	CryptoKey     string `json:"crypto_key"`
+	TrustedSubnet string `json:"trusted_subnet"`
+	GRPCAddress   string `json:"grpc_address"`
+}
+
+func readJSONConfig(path string) (*JSONConfig, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg JSONConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
 func New() (*Config, error) {
+	var configPath string
+	flag.StringVar(&configPath, "config", "", "Path to JSON config file")
+	flag.StringVar(&configPath, "c", "", "Path to JSON config file (short)")
+
+	configPath = configparam.ExtractConfig()
+
+	jsonCfg, _ := readJSONConfig(configPath)
+	if jsonCfg == nil {
+		jsonCfg = &JSONConfig{}
+	}
+
 	var address string
 	var logLevel string
 	var restore bool
@@ -40,29 +83,41 @@ func New() (*Config, error) {
 	var filePath string
 	var dsn string
 	var hashKey string
+	var cryptoKeyPath string
+	var trustedSubnet string
+	var grpcAddress string
 
 	addr := os.Getenv("ADDRESS")
-	addrFlag := flag.String("a", "localhost:8080", "The address to listen on for HTTP requests.")
+	addrFlag := flag.String("a", getString(jsonCfg.Address, "localhost:8080"), "The address to listen on for HTTP requests.")
 
 	ll := os.Getenv("LOG_LEVEL")
 	logLevelFlag := flag.String("ll", "info", "The log level to use")
 
 	rest := os.Getenv("RESTORE")
-	restFlag := flag.Bool("r", false, "Restore or no saved data after server start")
+	restFlag := flag.Bool("r", getBool(jsonCfg.Restore, false), "Restore or no saved data after server start")
 
 	storeInt := os.Getenv("STORE_INTERVAL")
-	storeIntFlag := flag.Int("i", 300, "After certain seconds current data will be stored in a file.")
+	storeIntFlag := flag.Int("i", getInt(jsonCfg.StoreInterval, 300), "After certain seconds current data will be stored in a file.")
 
 	fp := os.Getenv("FILE_STORAGE_PATH")
-	fpFlag := flag.String("f", "storage.txt", "The filepath where will be stored data from storage.")
+	fpFlag := flag.String("f", getString(jsonCfg.Filepath, "storage.txt"), "The filepath where will be stored data from storage.")
 
 	db := os.Getenv("DATABASE_DSN")
 	//postgres://postgres:postgres@localhost:5432/metrics
-	dbFlag := flag.String("d", "", "The dsn of postgresql.")
+	dbFlag := flag.String("d", getString(jsonCfg.DatabaseDSN, ""), "The dsn of postgresql.")
 
 	hk := os.Getenv("KEY")
 	//postgres://postgres:postgres@localhost:5432/metrics
 	hkFlag := flag.String("k", "", "The hash key.")
+
+	ck := os.Getenv("CRYPTO_KEY")
+	ckFlag := flag.String("crypto-key", getString(jsonCfg.CryptoKey, "./private.pem"), "Path to RSA private key file")
+
+	trSubnet := os.Getenv("TRUSTED_SUBNET")
+	trSubnetFlag := flag.String("t", getString(jsonCfg.TrustedSubnet, ""), "List of subnets, which are allowed to make request")
+
+	grpcAddr := os.Getenv("GRPC_ADDRESS")
+	grpcAddrFlag := flag.String("grpc-address", getString(jsonCfg.GRPCAddress, ""), "Address of gRPC server")
 
 	flag.Parse()
 
@@ -112,9 +167,29 @@ func New() (*Config, error) {
 		hashKey = hk
 	}
 
+	if ck == "" {
+		cryptoKeyPath = *ckFlag
+	} else {
+		cryptoKeyPath = ck
+	}
+
+	if trSubnet == "" {
+		trustedSubnet = *trSubnetFlag
+	} else {
+		trustedSubnet = trSubnet
+	}
+
+	if grpcAddr == "" {
+		grpcAddress = *grpcAddrFlag
+	} else {
+		grpcAddress = grpcAddr
+	}
+
 	return &Config{
 		Server: Server{
-			Address: address,
+			Address:       address,
+			TrustedSubnet: trustedSubnet,
+			GRPCAddress:   grpcAddress,
 		},
 		Log: Log{
 			Level: logLevel,
@@ -124,9 +199,31 @@ func New() (*Config, error) {
 			Filepath:      filePath,
 			Restore:       restore,
 			HashKey:       hashKey,
+			CryptoKeyPath: cryptoKeyPath,
 		},
 		Database: Database{
 			DSN: dsn,
 		},
 	}, nil
+}
+
+func getString(value, defaultValue string) string {
+	if value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getInt(value, defaultValue int) int {
+	if value != 0 {
+		return value
+	}
+	return defaultValue
+}
+
+func getBool(val *bool, fallback bool) bool {
+	if val != nil {
+		return *val
+	}
+	return fallback
 }

@@ -2,24 +2,46 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/configparam"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/crypto"
 	pkg_hash "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/hash"
+	pb "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/proto"
+	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/utils/localip"
 	"github.com/klauspost/cpuid/v2"
 	"github.com/shirou/gopsutil/v3/mem"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
+	"sync"
+	"syscall"
 	"time"
 )
 
-var buildVersion string = "1.0.0"
-var buildDate string = "2025-07-04"
-var buildCommit string = "HEAD"
+var (
+	pubKey     *rsa.PublicKey
+	pubKeyOnce sync.Once
+	pubKeyErr  error
+	wg         sync.WaitGroup
+)
+
+type Build struct {
+	Version string
+	Date    string
+	Commit  string
+}
+
+var buildInfo Build
 
 type Metric struct {
 	ID    string   `json:"id"`
@@ -39,6 +61,31 @@ type Config struct {
 	ConnAttempts   int
 	HashKey        string
 	RateLimit      int
+	CryptoKeyPath  string
+	UseGRPC        bool
+}
+
+type JSONAgentConfig struct {
+	Address        string `json:"address"`
+	ReportInterval int    `json:"report_interval"`
+	PollInterval   int    `json:"poll_interval"`
+	CryptoKey      string `json:"crypto_key"`
+}
+
+func readJSONAgentConfig(path string) (*JSONAgentConfig, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg JSONAgentConfig
+	err = json.Unmarshal(data, &cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &cfg, nil
 }
 
 func collectMetrics(m *Metrics) {
@@ -252,6 +299,17 @@ func collectMetrics(m *Metrics) {
 }
 
 func sendMetrics(client http.Client, ms []Metric, cfg Config) {
+	pubKeyOnce.Do(func() {
+		if cfg.CryptoKeyPath != "" {
+			pubKey, pubKeyErr = crypto.LoadPublicKey(cfg.CryptoKeyPath)
+		}
+	})
+
+	if pubKeyErr != nil {
+		log.Printf("Public key error: %v", pubKeyErr)
+		return
+	}
+
 	for _, metric := range ms {
 		var err error
 		data, err := json.Marshal(metric)
@@ -260,14 +318,24 @@ func sendMetrics(client http.Client, ms []Metric, cfg Config) {
 			return
 		}
 
+		if pubKey != nil {
+			encrypted, err := crypto.EncryptWithPublicKey(data, pubKey)
+			if err != nil {
+				log.Printf("Error encrypting: %v", err)
+				continue
+			}
+			data = encrypted
+		}
+
 		body := bytes.NewBuffer(data)
 		req, err := http.NewRequest("POST", fmt.Sprintf("http://%s/update/", cfg.Address), body)
 		if err != nil {
 			log.Printf("Error creating request: %v", err)
-			return
+			continue
 		}
-
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", "application/octet-stream")
+		realIP := localip.LocalIP()
+		req.Header.Set("X-Real-IP", realIP)
 
 		if cfg.HashKey != "" {
 			hash := pkg_hash.CalculateHashSHA256(body.Bytes(), cfg.HashKey)
@@ -298,22 +366,39 @@ func sendMetrics(client http.Client, ms []Metric, cfg Config) {
 }
 
 func getVars() Config {
+	var configPath string
+	flag.StringVar(&configPath, "config", "", "Path to JSON config file")
+	flag.StringVar(&configPath, "c", "", "Path to JSON config file (short)")
+
+	configPath = configparam.ExtractConfig()
+
+	jsonCfg, _ := readJSONAgentConfig(configPath)
+	if jsonCfg == nil {
+		jsonCfg = &JSONAgentConfig{}
+	}
+
 	var address string
 	var reportInterval int
 	var pollInterval int
 	var hashKey string
 	var rateLimit int
+	var cryptoKeyPath string
+	var useGrpc bool
 
 	addr := os.Getenv("ADDRESS")
 	reportInt := os.Getenv("REPORT_INTERVAL")
 	pollInt := os.Getenv("POLL_INTERVAL")
 	hashKeyStr := os.Getenv("KEY")
+	useGrpcEnv := os.Getenv("USE_GRPC")
 	addrFlag := flag.String("a", "localhost:8080", "The address to send HTTP requests.")
 	reportIntFlag := flag.Int("r", 10, "The interval in seconds between metric reporting. (in seconds)")
 	pollIntFlag := flag.Int("p", 2, "The interval in seconds between metric polling. (in seconds)")
 	hashKeyFlag := flag.String("k", "", "The hash key")
 	rateLimitStr := os.Getenv("RATE_LIMIT")
 	rateLimitFlag := flag.Int("l", 5, "Max concurrent outgoing requests")
+	cryptoKeyEnv := os.Getenv("CRYPTO_KEY")
+	cryptoKeyFlag := flag.String("crypto-key", "./public.pem", "Path to public key (PEM) for RSA encryption")
+	useGrpcFlag := flag.Bool("grpc", false, "Use gRPC to send metrics")
 	flag.Parse()
 
 	if addr == "" {
@@ -358,6 +443,18 @@ func getVars() Config {
 		rateLimit = val
 	}
 
+	if cryptoKeyEnv != "" {
+		cryptoKeyPath = cryptoKeyEnv
+	} else {
+		cryptoKeyPath = *cryptoKeyFlag
+	}
+
+	if useGrpcEnv != "" {
+		useGrpc = useGrpcEnv == "true"
+	} else {
+		useGrpc = *useGrpcFlag
+	}
+
 	return Config{
 		Address:        address,
 		ReportInterval: reportInterval,
@@ -365,6 +462,8 @@ func getVars() Config {
 		ConnAttempts:   3,
 		HashKey:        hashKey,
 		RateLimit:      rateLimit,
+		CryptoKeyPath:  cryptoKeyPath,
+		UseGRPC:        useGrpc,
 	}
 }
 
@@ -372,19 +471,74 @@ type Job struct {
 	Metric Metric
 }
 
-func worker(id int, jobs <-chan Job, client http.Client, cfg Config) {
+func worker(id int, jobs <-chan Job, client http.Client, cfg Config, wg *sync.WaitGroup) {
 	for job := range jobs {
-		sendMetrics(client, []Metric{job.Metric}, cfg)
+		if cfg.UseGRPC {
+			sendMetricsGRPC([]Metric{job.Metric}, cfg)
+		} else {
+			sendMetrics(client, []Metric{job.Metric}, cfg)
+		}
+		wg.Done()
 	}
 }
 
-func main() {
-	fmt.Printf("Build version: %s (или \"N/A\" при отсутствии значения) \n", buildVersion)
-	fmt.Printf("Build date: %s (или \"N/A\" при отсутствии значения) \n", buildDate)
-	fmt.Printf("Build commit: %s (или \"N/A\" при отсутствии значения) \n", buildCommit)
+func init() {
+	buildInfo.Version = "1.0.0"
+	buildInfo.Date = "2025-07-04"
+	buildInfo.Commit = "HEAD"
+}
 
+func sendMetricsGRPC(metrics []Metric, cfg Config) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := grpc.Dial(cfg.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Printf("gRPC dial error: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	client := pb.NewMetricsServiceClient(conn)
+
+	// Преобразуем в protobuf
+	var pbMetrics []*pb.Metric
+	for _, m := range metrics {
+		pbMetrics = append(pbMetrics, &pb.Metric{
+			Id:    m.ID,
+			Type:  m.MType,
+			Delta: *m.Delta,
+			Value: *m.Value,
+		})
+	}
+
+	_, err = client.SendMetrics(ctx, &pb.MetricsRequest{
+		Metrics: pbMetrics,
+	})
+	if err != nil {
+		log.Printf("SendMetrics RPC error: %v", err)
+		return
+	}
+
+	log.Println("Metrics sent via gRPC")
+}
+
+func main() {
+	fmt.Printf("Build version: %s (или \"N/A\" при отсутствии значения) \n", buildInfo.Version)
+	fmt.Printf("Build date: %s (или \"N/A\" при отсутствии значения) \n", buildInfo.Date)
+	fmt.Printf("Build commit: %s (или \"N/A\" при отсутствии значения) \n", buildInfo.Commit)
+
+	stopChan := make(chan os.Signal, 1)
+	signal.Notify(stopChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	config := getVars()
-	fmt.Println(config)
+	if config.CryptoKeyPath != "" {
+		pk, err := crypto.LoadPublicKey(config.CryptoKeyPath)
+		if err != nil {
+			log.Printf("Failed to load public key: %v", err)
+		} else {
+			pubKey = pk
+		}
+	}
 	client := http.Client{}
 	m := Metrics{}
 	collectTicker := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
@@ -395,8 +549,20 @@ func main() {
 	jobs := make(chan Job, 100)
 
 	for i := 0; i < config.RateLimit; i++ {
-		go worker(i, jobs, client, config)
+		go worker(i, jobs, client, config, &wg)
 	}
+
+	go func() {
+		<-stopChan
+		log.Println("Получен сигнал завершения, завершаем агент...")
+
+		collectTicker.Stop()
+		sendTicker.Stop()
+		close(jobs) // это завершит всех воркеров
+
+		wg.Wait() // дождёмся, пока воркеры отправят всё
+		os.Exit(0)
+	}()
 
 	go func() {
 		for {
@@ -408,6 +574,7 @@ func main() {
 				//	sendMetrics(client, metrics, config)
 				//}(append([]Metric(nil), m.data...))
 				for _, metric := range m.data {
+					wg.Add(1)
 					jobs <- Job{Metric: metric}
 				}
 			}
