@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/config"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/internal/entity"
+	grpc2 "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/grpc"
 	handler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http"
 	metricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/metric"
 	postgresMetricHandler "github.com/SiyovushAbdulloev/metriks_sprint_1/internal/handler/http/postgres_metric"
@@ -15,10 +16,13 @@ import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/httpserver"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/logger"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/postgres"
+	pb "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/proto"
 	"github.com/gin-gonic/gin/binding"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose/v3"
+	"google.golang.org/grpc"
 	"log"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -90,6 +94,24 @@ func Main(cf *config.Config) {
 		}
 	}
 
+	var grpcSrv *grpc.Server
+	if cf.Server.GRPCAddress != "" {
+		go func() {
+			lis, err := net.Listen("tcp", cf.Server.GRPCAddress)
+			if err != nil {
+				log.Fatalf("Ошибка запуска gRPC listener: %v", err)
+			}
+
+			grpcSrv = grpc.NewServer()
+			pb.RegisterMetricsServiceServer(grpcSrv, grpc2.NewGRPCServer(postgresUC, nil)) // или metricUC
+
+			log.Printf("gRPC сервер запущен на %s", cf.Server.GRPCAddress)
+			if err := grpcSrv.Serve(lis); err != nil {
+				log.Fatalf("Ошибка gRPC сервера: %v", err)
+			}
+		}()
+	}
+
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
@@ -113,6 +135,9 @@ func Main(cf *config.Config) {
 
 		// Сохраняем метрики в файл
 		metricHl.StoreInFile(cf.App.Filepath)
+		if grpcSrv != nil {
+			grpcSrv.GracefulStop()
+		}
 		log.Println("Метрики сохранены. Завершение.")
 	case err := <-serverErr:
 		log.Fatalf("Ошибка запуска сервера: %v", err)

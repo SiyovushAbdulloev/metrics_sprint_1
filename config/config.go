@@ -30,6 +30,7 @@ type App struct {
 type Server struct {
 	Address       string
 	TrustedSubnet string
+	GRPCAddress   string
 }
 
 type Log struct {
@@ -45,6 +46,7 @@ type JSONConfig struct {
 	HashKey       string `json:"hash_key"`
 	CryptoKey     string `json:"crypto_key"`
 	TrustedSubnet string `json:"trusted_subnet"`
+	GRPCAddress   string `json:"grpc_address"`
 }
 
 func readJSONConfig(path string) (*JSONConfig, error) {
@@ -83,6 +85,7 @@ func New() (*Config, error) {
 	var hashKey string
 	var cryptoKeyPath string
 	var trustedSubnet string
+	var grpcAddress string
 
 	addr := os.Getenv("ADDRESS")
 	addrFlag := flag.String("a", getString(jsonCfg.Address, "localhost:8080"), "The address to listen on for HTTP requests.")
@@ -112,6 +115,9 @@ func New() (*Config, error) {
 
 	trSubnet := os.Getenv("TRUSTED_SUBNET")
 	trSubnetFlag := flag.String("t", getString(jsonCfg.TrustedSubnet, ""), "List of subnets, which are allowed to make request")
+
+	grpcAddr := os.Getenv("GRPC_ADDRESS")
+	grpcAddrFlag := flag.String("grpc-address", getString(jsonCfg.GRPCAddress, ""), "Address of gRPC server")
 
 	flag.Parse()
 
@@ -173,10 +179,17 @@ func New() (*Config, error) {
 		trustedSubnet = trSubnet
 	}
 
+	if grpcAddr == "" {
+		grpcAddress = *grpcAddrFlag
+	} else {
+		grpcAddress = grpcAddr
+	}
+
 	return &Config{
 		Server: Server{
 			Address:       address,
 			TrustedSubnet: trustedSubnet,
+			GRPCAddress:   grpcAddress,
 		},
 		Log: Log{
 			Level: logLevel,

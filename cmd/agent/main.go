@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rsa"
 	"encoding/json"
 	"flag"
@@ -9,9 +10,12 @@ import (
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/configparam"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/crypto"
 	pkg_hash "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/hash"
+	pb "github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/proto"
 	"github.com/SiyovushAbdulloev/metriks_sprint_1/pkg/utils/localip"
 	"github.com/klauspost/cpuid/v2"
 	"github.com/shirou/gopsutil/v3/mem"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"math/rand"
 	"net/http"
@@ -58,6 +62,7 @@ type Config struct {
 	HashKey        string
 	RateLimit      int
 	CryptoKeyPath  string
+	UseGRPC        bool
 }
 
 type JSONAgentConfig struct {
@@ -378,11 +383,13 @@ func getVars() Config {
 	var hashKey string
 	var rateLimit int
 	var cryptoKeyPath string
+	var useGrpc bool
 
 	addr := os.Getenv("ADDRESS")
 	reportInt := os.Getenv("REPORT_INTERVAL")
 	pollInt := os.Getenv("POLL_INTERVAL")
 	hashKeyStr := os.Getenv("KEY")
+	useGrpcEnv := os.Getenv("USE_GRPC")
 	addrFlag := flag.String("a", "localhost:8080", "The address to send HTTP requests.")
 	reportIntFlag := flag.Int("r", 10, "The interval in seconds between metric reporting. (in seconds)")
 	pollIntFlag := flag.Int("p", 2, "The interval in seconds between metric polling. (in seconds)")
@@ -391,6 +398,7 @@ func getVars() Config {
 	rateLimitFlag := flag.Int("l", 5, "Max concurrent outgoing requests")
 	cryptoKeyEnv := os.Getenv("CRYPTO_KEY")
 	cryptoKeyFlag := flag.String("crypto-key", "./public.pem", "Path to public key (PEM) for RSA encryption")
+	useGrpcFlag := flag.Bool("grpc", false, "Use gRPC to send metrics")
 	flag.Parse()
 
 	if addr == "" {
@@ -441,6 +449,12 @@ func getVars() Config {
 		cryptoKeyPath = *cryptoKeyFlag
 	}
 
+	if useGrpcEnv != "" {
+		useGrpc = useGrpcEnv == "true"
+	} else {
+		useGrpc = *useGrpcFlag
+	}
+
 	return Config{
 		Address:        address,
 		ReportInterval: reportInterval,
@@ -449,6 +463,7 @@ func getVars() Config {
 		HashKey:        hashKey,
 		RateLimit:      rateLimit,
 		CryptoKeyPath:  cryptoKeyPath,
+		UseGRPC:        useGrpc,
 	}
 }
 
@@ -458,7 +473,11 @@ type Job struct {
 
 func worker(id int, jobs <-chan Job, client http.Client, cfg Config, wg *sync.WaitGroup) {
 	for job := range jobs {
-		sendMetrics(client, []Metric{job.Metric}, cfg)
+		if cfg.UseGRPC {
+			sendMetricsGRPC([]Metric{job.Metric}, cfg)
+		} else {
+			sendMetrics(client, []Metric{job.Metric}, cfg)
+		}
 		wg.Done()
 	}
 }
@@ -469,6 +488,41 @@ func init() {
 	buildInfo.Commit = "HEAD"
 }
 
+func sendMetricsGRPC(metrics []Metric, cfg Config) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := grpc.Dial(cfg.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Printf("gRPC dial error: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	client := pb.NewMetricsServiceClient(conn)
+
+	// Преобразуем в protobuf
+	var pbMetrics []*pb.Metric
+	for _, m := range metrics {
+		pbMetrics = append(pbMetrics, &pb.Metric{
+			Id:    m.ID,
+			Type:  m.MType,
+			Delta: *m.Delta,
+			Value: *m.Value,
+		})
+	}
+
+	_, err = client.SendMetrics(ctx, &pb.MetricsRequest{
+		Metrics: pbMetrics,
+	})
+	if err != nil {
+		log.Printf("SendMetrics RPC error: %v", err)
+		return
+	}
+
+	log.Println("Metrics sent via gRPC")
+}
+
 func main() {
 	fmt.Printf("Build version: %s (или \"N/A\" при отсутствии значения) \n", buildInfo.Version)
 	fmt.Printf("Build date: %s (или \"N/A\" при отсутствии значения) \n", buildInfo.Date)
@@ -477,6 +531,14 @@ func main() {
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	config := getVars()
+	if config.CryptoKeyPath != "" {
+		pk, err := crypto.LoadPublicKey(config.CryptoKeyPath)
+		if err != nil {
+			log.Printf("Failed to load public key: %v", err)
+		} else {
+			pubKey = pk
+		}
+	}
 	client := http.Client{}
 	m := Metrics{}
 	collectTicker := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
